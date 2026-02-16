@@ -96,3 +96,17 @@ function checkAndUpdateDailyStats(todayStats) {
     todayStats.lastAttemptVote = Date.now()
     return todayStats
 }
+
+/**
+ * Инициализирует статистику перед началом голосования
+ * Проверяет и обновляет месячную и дневную статистику
+ * @param {Object} project - Объект проекта
+ * @param {Object} generalStats - Общая статистика
+ * @param {Object} todayStats - Статистика за сегодня
+ * @returns {Object} Обновленная статистика за сегодня
+ */
+function initializeStatsBeforeVote(project, generalStats, todayStats) {
+    checkAndUpdateMonthlyStats(project)
+    checkAndUpdateGeneralMonthlyStats(generalStats)
+    return checkAndUpdateDailyStats(todayStats)
+}

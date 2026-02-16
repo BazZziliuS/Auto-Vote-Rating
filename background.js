@@ -242,28 +242,9 @@ async function newWindow(project, opened) {
     console.log(getProjectPrefix(project, true), chrome.i18n.getMessage('startedAutoVote'))
     sendNotification(getProjectPrefix(project, false), chrome.i18n.getMessage('startedAutoVote'), 'start', 'openProject_' + project.key)
 
-    if (new Date(project.stats.lastAttemptVote).getMonth() < new Date().getMonth() || new Date(project.stats.lastAttemptVote).getFullYear() < new Date().getFullYear()) {
-        project.stats.lastMonthSuccessVotes = project.stats.monthSuccessVotes
-        project.stats.monthSuccessVotes = 0
-    }
-    project.stats.lastAttemptVote = Date.now()
+    // Инициализация статистики перед голосованием
+    todayStats = initializeStatsBeforeVote(project, generalStats, todayStats)
 
-    if (new Date(generalStats.lastAttemptVote).getMonth() < new Date().getMonth() || new Date(generalStats.lastAttemptVote).getFullYear() < new Date().getFullYear()) {
-        generalStats.lastMonthSuccessVotes = generalStats.monthSuccessVotes
-        generalStats.monthSuccessVotes = 0
-    }
-    generalStats.lastAttemptVote = Date.now()
-
-    if (new Date(todayStats.lastAttemptVote).getDay() < new Date().getDay()) {
-        todayStats = {
-            successVotes: 0,
-            errorVotes: 0,
-            laterVotes: 0,
-            lastSuccessVote: null,
-            lastAttemptVote: null
-        }
-    }
-    todayStats.lastAttemptVote = Date.now()
     await db.put('other', generalStats, 'generalStats')
     await db.put('other', todayStats, 'todayStats')
     await updateValue('projects', project)

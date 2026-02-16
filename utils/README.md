@@ -74,8 +74,9 @@ utils/
 - `checkAndUpdateMonthlyStats(project)` - Проверяет и обновляет месячную статистику
 - `checkAndUpdateGeneralMonthlyStats(generalStats)` - Проверяет общую месячную статистику
 - `checkAndUpdateDailyStats(todayStats)` - Проверяет и обновляет дневную статистику
+- `initializeStatsBeforeVote(project, generalStats, todayStats)` - Инициализирует статистику перед голосованием
 
-**Используется в:** background.js (endVote)
+**Используется в:** background.js (newWindow, endVote)
 
 ---
 
