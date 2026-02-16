@@ -21,6 +21,7 @@ importScripts('utils/message-handlers.js')
 importScripts('utils/notifications.js')
 importScripts('utils/cookies-manager.js')
 importScripts('utils/error-handler.js')
+importScripts('utils/url-matchers.js')
 importScripts('utils/console-interceptor.js')
 
 // TODO отложенный importScripts пока не работают, подробнее https://bugs.chromium.org/p/chromium/issues/detail?id=1198822
@@ -347,7 +348,7 @@ const webNavigationOnCommittedListener = function (details) {
     const filesMain = []
     if (details.frameId === 0) {
         // Через эти сайты пользователь может авторизоваться, я пока не поддерживаю автоматическую авторизацию, не мешаем ему в авторизации
-        if (details.url.match(/facebook.com\/*/) || details.url.match(/google.com\/*/) || details.url.match(/accounts.google.com\/*/) || details.url.match(/reddit.com\/*/) || details.url.match(/twitter.com\/*/)) {
+        if (isAuthUrl(details.url)) {
             return
         }
         // Если пользователь авторизовывается через эти сайты, но у расширения на это нет прав, всё равно не мешаем ему, пускай сам авторизуется не смотря, на то что есть автоматизация авторизации
@@ -368,17 +369,7 @@ const webNavigationOnCommittedListener = function (details) {
             filesIsolated.push('scripts/main/alert_isolated.js')
             filesMain.push('scripts/main/alert_main.js')
         }
-    } else if (details.url.match(/hcaptcha.com\/captcha\/*/)
-        || details.url.match(/https?:\/\/(.+?\.)?google.com\/recaptcha\/api.\/anchor*/)
-        || details.url.match(/https?:\/\/(.+?\.)?google.com\/recaptcha\/api.\/bframe*/)
-        || details.url.match(/https?:\/\/(.+?\.)?recaptcha.net\/recaptcha\/api.\/anchor*/)
-        || details.url.match(/https?:\/\/(.+?\.)?recaptcha.net\/recaptcha\/api.\/bframe*/)
-        || details.url.match(/https?:\/\/(.+?\.)?google.com\/recaptcha\/api\/fallback*/)
-        || details.url.match(/https?:\/\/(.+?\.)?recaptcha.net\/recaptcha\/api\/fallback*/)
-        || details.url.match(/https?:\/\/(.+?\.)?recaptcha.net\/recaptcha\/enterprise\/fallback*/)
-        || details.url.match(/https?:\/\/(.+?\.)?google.com\/recaptcha\/enterprise\/anchor*/)
-        || details.url.match(/https?:\/\/(.+?\.)?recaptcha.net\/recaptcha\/enterprise\/bframe*/)
-        || details.url.match(/https:\/\/challenges.cloudflare.com\/*/)) {
+    } else if (isCaptchaUrlForCommitted(details.url)) {
         filesMain.push('scripts/main/visible.js')
         filesIsolated.push('scripts/main/alert_isolated.js')
         filesMain.push('scripts/main/alert_main.js')
@@ -418,7 +409,7 @@ const webNavigationOnCompletedListener = async function (details) {
 
     if (details.frameId === 0) {
         // Через эти сайты пользователь может авторизоваться, я пока не поддерживаю автоматическую авторизацию, не мешаем ему в авторизации
-        if (details.url.match(/facebook.com\/*/) || details.url.match(/google.com\/*/) || details.url.match(/accounts.google.com\/*/) || details.url.match(/reddit.com\/*/) || details.url.match(/twitter.com\/*/)) {
+        if (isAuthUrl(details.url)) {
             return
         }
         const project = await db.get('projects', opened.key)
@@ -482,20 +473,7 @@ const webNavigationOnCompletedListener = async function (details) {
         } catch (error) {
             catchTabError(error, project, db)
         }
-    } else if (details.frameId !== 0 && (
-        details.url.match(/hcaptcha.com\/captcha\/*/)
-        || details.url.includes('smartcaptcha.yandexcloud.net')
-        || details.url.includes('service.mtcaptcha.com')
-        || details.url.match(/https?:\/\/(.+?\.)?google.com\/recaptcha\/api.\/anchor*/)
-        || details.url.match(/https?:\/\/(.+?\.)?google.com\/recaptcha\/api.\/bframe*/)
-        || details.url.match(/https?:\/\/(.+?\.)?recaptcha.net\/recaptcha\/api.\/anchor*/)
-        || details.url.match(/https?:\/\/(.+?\.)?recaptcha.net\/recaptcha\/api.\/bframe*/)
-        || details.url.match(/https?:\/\/(.+?\.)?google.com\/recaptcha\/api\/fallback*/)
-        || details.url.match(/https?:\/\/(.+?\.)?recaptcha.net\/recaptcha\/api\/fallback*/)
-        || details.url.match(/https?:\/\/(.+?\.)?recaptcha.net\/recaptcha\/enterprise\/fallback*/)
-        || details.url.match(/https?:\/\/(.+?\.)?google.com\/recaptcha\/enterprise\/anchor*/)
-        || details.url.match(/https?:\/\/(.+?\.)?service\.mtcaptcha\.com\/mtcv1/)
-        || details.url.match(/https:\/\/challenges.cloudflare.com\/*/))) {
+    } else if (details.frameId !== 0 && isCaptchaUrl(details.url)) {
 
         const project = await db.get('projects', opened.key)
 
@@ -556,14 +534,9 @@ const webRequestOnErrorOccurredListener = async function (details) {
         endVote({errorVoteNetwork: [details.error, details.url]}, null, project)
     } else */
     if (openedProjects.has(details.tabId)) {
-        if (details.type === 'main_frame' || details.url.match(/hcaptcha.com\/captcha\/*/) || details.url.match(/https?:\/\/(.+?\.)?google.com\/recaptcha\/*/) || details.url.match(/https?:\/\/(.+?\.)?recaptcha.net\/recaptcha\/*/) || details.url.match(/https:\/\/challenges.cloudflare.com\/*/)) {
+        if (details.type === 'main_frame' || isCaptchaDomain(details.url)) {
             const opened = openedProjects.get(details.tabId)
-            if (
-                //Chrome
-                details.error.includes('net::ERR_ABORTED') || details.error.includes('net::ERR_CONNECTION_RESET') || details.error.includes('net::ERR_NETWORK_CHANGED') || details.error.includes('net::ERR_CACHE_MISS') || details.error.includes('net::ERR_BLOCKED_BY_CLIENT') || details.error.includes('net::ERR_QUIC_PROTOCOL_ERROR')
-                //FireFox
-                || details.error.includes('NS_BINDING_ABORTED') || details.error.includes('NS_ERROR_NET_ON_RESOLVED') || details.error.includes('NS_ERROR_NET_ON_RESOLVING') || details.error.includes('NS_ERROR_NET_ON_WAITING_FOR') || details.error.includes('NS_ERROR_NET_ON_CONNECTING_TO') || details.error.includes('NS_ERROR_FAILURE') || details.error.includes('NS_ERROR_DOCSHELL_DYING') || details.error.includes('NS_ERROR_NET_ON_TRANSACTION_CLOSE')) {
-                // console.warn(getProjectPrefix(project, true), details.error)
+            if (isIgnorableNetworkError(details.error)) {
                 return
             }
             const sender = {tab: {id: details.tabId}, url: details.url}
@@ -575,14 +548,9 @@ const webRequestOnErrorOccurredListener = async function (details) {
 const webNavigationOnErrorOccurredListener = async function (details) {
     await initializeFunc
     if (openedProjects.has(details.tabId)) {
-        if (details.frameId === 0 || details.url.match(/hcaptcha.com\/captcha\/*/) || details.url.match(/https?:\/\/(.+?\.)?google.com\/recaptcha\/*/) || details.url.match(/https?:\/\/(.+?\.)?recaptcha.net\/recaptcha\/*/) || details.url.match(/https:\/\/challenges.cloudflare.com\/*/)) {
+        if (details.frameId === 0 || isCaptchaDomain(details.url)) {
             const opened = openedProjects.get(details.tabId)
-            if (
-                //Chrome
-                details.error.includes('net::ERR_ABORTED') || details.error.includes('net::ERR_CONNECTION_RESET') || details.error.includes('net::ERR_NETWORK_CHANGED') || details.error.includes('net::ERR_CACHE_MISS') || details.error.includes('net::ERR_BLOCKED_BY_CLIENT')
-                //FireFox
-                || details.error.includes('NS_BINDING_ABORTED') || details.error.includes('NS_ERROR_NET_ON_RESOLVED') || details.error.includes('NS_ERROR_NET_ON_RESOLVING') || details.error.includes('NS_ERROR_NET_ON_WAITING_FOR') || details.error.includes('NS_ERROR_NET_ON_CONNECTING_TO') || details.error.includes('NS_ERROR_FAILURE') || details.error.includes('NS_ERROR_DOCSHELL_DYING') || details.error.includes('NS_ERROR_NET_ON_TRANSACTION_CLOSE')) {
-                // console.warn(getProjectPrefix(project, true), details.error)
+            if (isIgnorableNetworkError(details.error)) {
                 return
             }
             const sender = {tab: {id: details.tabId}, url: details.url}

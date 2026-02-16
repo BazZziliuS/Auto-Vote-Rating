@@ -2,7 +2,7 @@
 
 Директория содержит переиспользуемые модули для расширения Auto Vote Rating.
 
-## 📁 Структура модулей (17 модулей)
+## 📁 Структура модулей (18 модулей)
 
 ```
 utils/
@@ -24,6 +24,7 @@ utils/
 ├── notifications.js              # 🔔 Уведомления
 ├── cookies-manager.js            # 🍪 Управление cookies
 ├── error-handler.js              # ⚠️ Обработка ошибок
+├── url-matchers.js               # 🔗 Проверка и сопоставление URL
 └── console-interceptor.js        # 📝 Логирование
 ```
 
@@ -210,6 +211,22 @@ utils/
 
 ---
 
+### 🔗 Проверка URL
+
+#### `url-matchers.js`
+Утилиты для проверки и сопоставления URL.
+
+**Функции:**
+- `isAuthUrl(url)` - Проверяет является ли URL авторизационным
+- `isCaptchaUrl(url)` - Проверяет является ли URL капчей (полная проверка)
+- `isCaptchaUrlForCommitted(url)` - Проверка капчи для committed listener
+- `isCaptchaDomain(url)` - Проверяет является ли URL доменом капчи
+- `isIgnorableNetworkError(errorMessage)` - Проверяет игнорируемые сетевые ошибки
+
+**Используется в:** background.js (webNavigationOnCommittedListener, webNavigationOnCompletedListener, webRequestOnErrorOccurredListener, webNavigationOnErrorOccurredListener)
+
+---
+
 ### ⚠️ Обработка ошибок
 
 #### `error-handler.js`
@@ -337,6 +354,7 @@ importScripts('utils/tab-manager.js')
 importScripts('utils/notifications.js')
 importScripts('utils/cookies-manager.js')        // Управление cookies
 importScripts('utils/error-handler.js')          // Обработка ошибок
+importScripts('utils/url-matchers.js')           // Проверка URL
 importScripts('utils/console-interceptor.js')    // Последним - перехват console
 ```
 
