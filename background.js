@@ -71,7 +71,7 @@ async function checkVote() {
             db.put('other', onLine, 'onLine')
         } else {
             // TODO к сожалению в Service Worker отсутствует слушатель на восстановление соединения с интернетом, у нас остаётся только 1 вариант, это попытаться снова запустить checkVote через минуту
-            chrome.alarms.create('checkVote', {when: Date.now() + TIME.MIN_ALARM_DELAY})
+            await createSafeAlarm('checkVote', Date.now() + TIME.MIN_ALARM_DELAY, null)
             return
         }
     }
@@ -135,13 +135,7 @@ async function reloadAllAlarms() {
     while (cursor) {
         const project = cursor.value
         if (project.time != null && project.time > Date.now() && times.indexOf(project.time) === -1) {
-            let when = project.time
-            if (when - Date.now() < TIME.MIN_ALARM_DELAY) when = Date.now() + TIME.MIN_ALARM_DELAY
-            try {
-                chrome.alarms.create(String(cursor.key), {when})
-            } catch (error) {
-                console.warn(getProjectPrefix(project, true), 'Ошибка при создании chrome.alarms', error.message)
-            }
+            await createSafeAlarm(String(cursor.key), project.time, project)
             times.push(project.time)
         }
         // noinspection JSVoidFunctionReturnValueUsed
@@ -165,7 +159,7 @@ async function checkOpen(project, transaction) {
         // Проверка интернета отключена, пропускаем
     } else if (!navigator.onLine && onLine) {
         // TODO к сожалению в Service Worker отсутствует слушатель на восстановление соединения с интернетом, у нас остаётся только 1 вариант, это попытаться снова запустить checkVote через минуту
-        chrome.alarms.create('checkVote', {when: Date.now() + TIME.MIN_ALARM_DELAY})
+        await createSafeAlarm('checkVote', Date.now() + TIME.MIN_ALARM_DELAY, null)
 
         sendNotification(getProjectPrefix(project, false), chrome.i18n.getMessage('internetDisconnected'), 'error', 'openProject_' + project.key)
         console.warn(getProjectPrefix(project, true), chrome.i18n.getMessage('internetDisconnected'))
@@ -259,13 +253,7 @@ async function newWindow(project, opened) {
             }
         }
         if (create) {
-            let when = opened.nextAttempt
-            if (when - Date.now() < TIME.MIN_ALARM_DELAY) when = Date.now() + TIME.MIN_ALARM_DELAY
-            try {
-                await chrome.alarms.create('nextAttempt_' + project.key, {when})
-            } catch (error) {
-                console.warn(getProjectPrefix(project, true), 'Ошибка при создании chrome.alarms', error.message)
-            }
+            await createSafeAlarm('nextAttempt_' + project.key, opened.nextAttempt, project)
         }
     }
 
@@ -1069,11 +1057,7 @@ async function endVote(request, sender, project) {
             }
         }
         if (create2) {
-            try {
-                await chrome.alarms.create(String(project.key), {when})
-            } catch (error) {
-                console.warn(getProjectPrefix(project, true), 'Ошибка при создании chrome.alarms', error.message)
-            }
+            await createSafeAlarm(String(project.key), when, project)
         }
     }
 
@@ -1092,13 +1076,7 @@ async function endVote(request, sender, project) {
     }, timeout)
 
     // TODO мы не можем быть уверены что setTimeout в Service Worker 100% отработает, поэтому мы на всякий случай создаём chrome.alarm
-    let alarmTimeout = timeout
-    if (alarmTimeout < TIME.MIN_ALARM_DELAY) alarmTimeout = TIME.MIN_ALARM_DELAY
-    try {
-        await chrome.alarms.create('checkVote', {when: Date.now() + alarmTimeout})
-    } catch (error) {
-        console.warn(getProjectPrefix(project, true), 'Ошибка при создании chrome.alarms', error.message)
-    }
+    await createSafeAlarm('checkVote', Date.now() + timeout, project)
 }
 
 
