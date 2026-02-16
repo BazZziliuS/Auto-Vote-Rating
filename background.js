@@ -19,6 +19,7 @@ importScripts('utils/silent-vote-handler.js')
 importScripts('utils/tab-manager.js')
 importScripts('utils/message-handlers.js')
 importScripts('utils/notifications.js')
+importScripts('utils/cookies-manager.js')
 importScripts('utils/console-interceptor.js')
 
 // TODO отложенный importScripts пока не работают, подробнее https://bugs.chromium.org/p/chromium/issues/detail?id=1198822
@@ -219,23 +220,7 @@ async function checkOpen(project, transaction) {
     if (settings.debug) console.log(getProjectPrefix(project, true), 'пред запуск')
 
     if (project.rating === 'monitoringminecraft.ru') {
-        promises.push(clearMonitoringMinecraftCookies())
-
-        async function clearMonitoringMinecraftCookies() {
-            let url
-            if (project.rating === 'monitoringminecraft.ru') {
-                url = '.monitoringminecraft.ru'
-            }
-            let cookies = await chrome.cookies.getAll({domain: url})
-            if (settings.debug) console.log(chrome.i18n.getMessage('deletingCookies', url))
-            for (let i = 0; i < cookies.length; i++) {
-                if (cookies[i].domain.charAt(0) === '.') cookies[i].domain = cookies[i].domain.substring(1, cookies[i].domain.length)
-                await chrome.cookies.remove({
-                    url: 'https://' + cookies[i].domain + cookies[i].path,
-                    name: cookies[i].name
-                })
-            }
-        }
+        promises.push(clearMonitoringMinecraftCookies(project, settings.debug))
     }
 
     // noinspection JSIgnoredPromiseFromCall
@@ -737,52 +722,13 @@ let fakeIdToId = {};
 
 async function onRuntimeMessage(request, sender, sendResponse) {
     if (request.reloadCaptcha) {
-        // noinspection JSVoidFunctionReturnValueUsed,JSCheckFunctionSignatures
-        const frames = await chrome.webNavigation.getAllFrames({tabId: sender.tab.id})
-        for (const frame of frames) {
-            // noinspection JSUnresolvedVariable
-            if (frame.url.match(/https?:\/\/(.+?\.)?google.com\/recaptcha\/api.\/anchor*/) || frame.url.match(/https?:\/\/(.+?\.)?recaptcha.net\/recaptcha\/api.\/anchor*/) || frame.url.match(/https?:\/\/(.+?\.)?google.com\/recaptcha\/enterprise\/anchor*/)) {
-                function reload() {
-                    document.location.reload()
-                }
-
-                if (settings.debug) { // noinspection JSUnresolvedReference
-                    console.log('Injecting funcReloadCaptcha to ' + frame.url)
-                }
-                // noinspection JSCheckFunctionSignatures,JSUnresolvedVariable
-                await chrome.scripting.executeScript({
-                    target: {tabId: sender.tab.id, frameIds: [frame.frameId]},
-                    func: reload
-                })
-            }
-        }
+        await handleReloadCaptcha(sender, settings)
         return
     } else if (request.captchaPassed) {
-        try {
-            await chrome.tabs.sendMessage(sender.tab.id, request)
-        } catch (error) {
-            if (!error.message.includes('Could not establish connection. Receiving end does not exist') && !error.message.includes('The message port closed before a response was received')) {
-                console.warn(error.message)
-            }
-        }
+        await handleCaptchaPassed(request, sender)
         if (request.captchaPassed !== 'double') return
     } else if (request.HackTimer) {
-        if (request.name === 'setInterval') {
-            fakeIdToId[request.fakeId] = setInterval(function () {
-                triggerTimer(request.name, sender, request.fakeId);
-            }, request.time);
-        } else if (request.name === 'clearInterval') {
-            clearInterval(fakeIdToId[request.fakeId]);
-            delete fakeIdToId[request.fakeId];
-        } else if (request.name === 'setTimeout') {
-            fakeIdToId[request.fakeId] = setTimeout(function () {
-                triggerTimer(request.name, sender, request.fakeId);
-                delete fakeIdToId[request.fakeId];
-            }, request.time);
-        } else if (request.name === 'clearTimeout') {
-            clearTimeout(fakeIdToId[request.fakeId]);
-            delete fakeIdToId[request.fakeId];
-        }
+        handleHackTimer(request, sender, fakeIdToId)
         return
     }
 
@@ -808,67 +754,12 @@ async function onRuntimeMessage(request, sender, sendResponse) {
         settings = await db.get('other', 'settings')
         return
     } else if (request.projectDeleted) {
-        const transaction = db.transaction(['projects', 'other'], 'readwrite')
-        let nowVoting = false
-        //Если эта вкладка была уже открыта, он закрывает её
-        for (const [key, value] of openedProjects) {
-            if (request.projectDeleted.key === value.key) {
-                if (key === 'start_' + request.projectDeleted.key) {
-                    sendResponse('reject')
-                    return
-                }
-                nowVoting = true
-                openedProjects.delete(key)
-                tryCloseTab(key, request.projectDeleted, 0)
-                await transaction.objectStore('other').put(openedProjects, 'openedProjects')
-                break
-            }
-        }
-        await transaction.objectStore('projects').delete(request.projectDeleted.key)
-        await chrome.alarms.clear(String(request.projectDeleted.key))
-        if (nowVoting) {
-            checkVote()
-            console.log(getProjectPrefix(request.projectDeleted, true), chrome.i18n.getMessage('projectDeleted'))
-        }
-        sendResponse('success')
+        const result = await handleProjectDeleted(request, openedProjects, db)
+        sendResponse(result)
         return
     } else if (request.projectRestart) {
-        const transaction = db.transaction(['projects', 'other'], 'readwrite')
-        for (const [key, value] of openedProjects) {
-            if (request.projectRestart.key === value.key) {
-                if (request.confirmed) {
-                    openedProjects.delete(key)
-                    transaction.objectStore('other').put(openedProjects, 'openedProjects')
-                    tryCloseTab(key, request.projectRestart, 0)
-                    console.log(getProjectPrefix(request.projectRestart, true), chrome.i18n.getMessage('canceledVote'))
-                } else {
-                    sendResponse('confirmNow')
-                    return
-                }
-            }
-        }
-        for (const [key, value] of openedProjects) {
-            if (request.projectRestart.rating === value.rating || settings.disabledOneVote) {
-                if (request.confirmed) {
-                    openedProjects.delete(key)
-                    await transaction.objectStore('other').put(openedProjects, 'openedProjects')
-                    const project = await transaction.objectStore('projects').get(value.key)
-                    tryCloseTab(key, project, 0)
-                    console.log(getProjectPrefix(project, true), chrome.i18n.getMessage('canceledVote'))
-                } else {
-                    sendResponse('confirmQueue')
-                    return
-                }
-            }
-        }
-
-        await chrome.alarms.clear(String(request.projectRestart.key))
-        request.projectRestart.time = null
-        await updateValue('projects', request.projectRestart)
-        console.log(getProjectPrefix(request.projectRestart, true), chrome.i18n.getMessage('projectRestarted'))
-        checkOpen(request.projectRestart)
-        checkVote()
-        sendResponse('success')
+        const result = await handleProjectRestart(request, openedProjects, db, settings)
+        sendResponse(result)
         return
     }
 
@@ -910,18 +801,7 @@ async function onRuntimeMessage(request, sender, sendResponse) {
     }
 }
 
-async function triggerTimer(name, sender, fakeId) {
-    try {
-        await chrome.tabs.sendMessage(sender.tab.id, {HackTimer: true, fakeId}, {
-            documentId: sender.documentId,
-            frameId: sender.frameId
-        });
-    } catch (error) {
-        if (name === 'setInterval') clearInterval(fakeIdToId[fakeId]);
-        delete fakeIdToId[fakeId];
-    }
-}
-
+// Функция triggerTimer перенесена в utils/message-handlers.js
 // Функции tryOpenTab, tryCloseTab, tryGroupTabs перенесены в utils/tab-manager.js
 
 //Завершает голосование, если есть ошибка то обрабатывает её

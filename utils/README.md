@@ -2,7 +2,7 @@
 
 Директория содержит переиспользуемые модули для расширения Auto Vote Rating.
 
-## 📁 Структура модулей (15 модулей)
+## 📁 Структура модулей (16 модулей)
 
 ```
 utils/
@@ -22,6 +22,7 @@ utils/
 ├── tab-manager.js                # 🗂️ Управление вкладками
 ├── message-handlers.js           # 📨 Обработка сообщений
 ├── notifications.js              # 🔔 Уведомления
+├── cookies-manager.js            # 🍪 Управление cookies
 └── console-interceptor.js        # 📝 Логирование
 ```
 
@@ -194,6 +195,19 @@ utils/
 
 ---
 
+### 🍪 Cookies
+
+#### `cookies-manager.js`
+Управление cookies браузера.
+
+**Функции:**
+- `clearDomainCookies(domain, debug)` - Очищает все cookies для указанного домена
+- `clearMonitoringMinecraftCookies(project, debug)` - Очищает cookies для monitoringminecraft.ru
+
+**Используется в:** background.js (checkOpen)
+
+---
+
 ### 🔔 Уведомления и логирование
 
 #### `notifications.js`
@@ -300,6 +314,7 @@ importScripts('utils/vote-result-handler.js')    // Обработка резу�
 importScripts('utils/stats-updater.js')
 importScripts('utils/tab-manager.js')
 importScripts('utils/notifications.js')
+importScripts('utils/cookies-manager.js')        // Управление cookies
 importScripts('utils/console-interceptor.js')    // Последним - перехват console
 ```
 
