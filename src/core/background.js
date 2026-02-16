@@ -3,14 +3,14 @@
 const state = self.serviceWorker.state
 
 importScripts('libs/idb.umd.js')
-importScripts('projects.js')
-importScripts('main.js')
-importScripts('utils/index.js')
+importScripts('src/core/projects.js')
+importScripts('src/core/main.js')
+importScripts('src/utils/index.js')
 
 // TODO отложенный importScripts пока не работают, подробнее https://bugs.chromium.org/p/chromium/issues/detail?id=1198822
 self.addEventListener('install', () => {
     importScripts('libs/linkedom.js')
-    importScripts('scripts/mcserver-list.eu_silentvote.js', 'scripts/misterlauncher.org_silentvote.js', 'scripts/serverpact.com_silentvote.js', 'scripts/genshindrop.com_silentvote.js', 'scripts/bloodrust.com_silentvote.js')
+    importScripts('src/scripts/silentvote/mcserver-list.eu_silentvote.js', 'src/scripts/silentvote/misterlauncher.org_silentvote.js', 'src/scripts/silentvote/serverpact.com_silentvote.js', 'src/scripts/silentvote/genshindrop.com_silentvote.js', 'src/scripts/silentvote/bloodrust.com_silentvote.js')
 })
 
 //ID группы вкладок в которой сейчас открыты вкладки расширения

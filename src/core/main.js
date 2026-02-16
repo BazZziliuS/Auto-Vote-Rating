@@ -1,6 +1,6 @@
 // Импорт утилит базы данных
-importScripts('utils/db-init.js')
-importScripts('utils/db-migrations/migrations.js')
+importScripts('src/utils/database/db-init.js')
+importScripts('src/utils/database/db-migrations/migrations.js')
 
 //Настройки
 // noinspection ES6ConvertVarToLetConst

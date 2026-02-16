@@ -16,24 +16,24 @@ function determineScriptsToInject(details, getDomainWithoutSubdomain, isCaptchaU
 
     if (details.frameId === 0) {
         // Основной фрейм
-        filesMain.push('scripts/main/visible.js')
+        filesMain.push('src/scripts/common/visible.js')
 
         const domain = getDomainWithoutSubdomain(details.url)
 
         if (allProjects[domain]?.needIsTrusted?.()) {
-            filesIsolated.push('scripts/main/istrusted_isolated.js')
-            filesMain.push('scripts/main/istrusted_main.js')
+            filesIsolated.push('src/scripts/common/istrusted_isolated.js')
+            filesMain.push('src/scripts/common/istrusted_main.js')
         }
 
         if (!allProjects[domain]?.dontUseAlert?.()) {
-            filesIsolated.push('scripts/main/alert_isolated.js')
-            filesMain.push('scripts/main/alert_main.js')
+            filesIsolated.push('src/scripts/common/alert_isolated.js')
+            filesMain.push('src/scripts/common/alert_main.js')
         }
     } else if (isCaptchaUrlForCommitted(details.url)) {
         // Фрейм с капчей
-        filesMain.push('scripts/main/visible.js')
-        filesIsolated.push('scripts/main/alert_isolated.js')
-        filesMain.push('scripts/main/alert_main.js')
+        filesMain.push('src/scripts/common/visible.js')
+        filesIsolated.push('src/scripts/common/alert_isolated.js')
+        filesMain.push('src/scripts/common/alert_main.js')
     }
 
     return {filesIsolated, filesMain}
@@ -118,20 +118,20 @@ async function injectVoteScripts(tabId, project, settings, allProjects, debug, u
     }
 
     // Инъекция основных скриптов голосования
-    if (debug) console.log('Injecting scripts/' + project.rating.toLowerCase() + '.js, scripts/main/api.js to ' + url)
+    if (debug) console.log('Injecting src/scripts/sites/' + project.rating.toLowerCase() + '.js, src/scripts/common/api.js to ' + url)
     await chrome.scripting.executeScript({
         target: {tabId},
-        files: ['scripts/main/hacktimer.js', 'scripts/' + (project.ratingMain || project.rating) + '.js', 'scripts/main/api.js']
+        files: ['src/scripts/common/hacktimer.js', 'src/scripts/sites/' + (project.ratingMain || project.rating) + '.js', 'src/scripts/common/api.js']
     })
 
     // Инъекция world скрипта если требуется
     // noinspection JSUnresolvedVariable,JSUnresolvedFunction
     if (allProjects[project.rating]?.needWorld?.()) {
-        if (debug) console.log('Injecting scripts/' + project.rating.toLowerCase() + '_world.js to ' + url + ' in MAIN world')
+        if (debug) console.log('Injecting src/scripts/sites/' + project.rating.toLowerCase() + '_world.js to ' + url + ' in MAIN world')
         await chrome.scripting.executeScript({
             target: {tabId},
             world: 'MAIN',
-            files: ['scripts/' + (project.ratingMain || project.rating) + '_world.js']
+            files: ['src/scripts/sites/' + (project.ratingMain || project.rating) + '_world.js']
         })
     }
 
@@ -151,10 +151,10 @@ async function injectVoteScripts(tabId, project, settings, allProjects, debug, u
  * @returns {Promise<void>}
  */
 async function injectCaptchaScripts(tabId, frameId, project, settings, debug, url) {
-    if (debug) console.log('Injecting scripts/main/captchaclicker.js to ' + url)
+    if (debug) console.log('Injecting src/scripts/common/captchaclicker.js to ' + url)
     await chrome.scripting.executeScript({
         target: {tabId, frameIds: [frameId]},
-        files: ['scripts/main/hacktimer.js', 'scripts/main/audio_captcha.js', 'scripts/main/captchaclicker.js']
+        files: ['src/scripts/common/hacktimer.js', 'src/scripts/common/audio_captcha.js', 'src/scripts/common/captchaclicker.js']
     })
 
     // Проверка статуса вкладки перед отправкой сообщения

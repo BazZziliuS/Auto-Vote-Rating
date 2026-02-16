@@ -3,14 +3,14 @@
   "short_name": "AVR",
   "author": "Serega007",
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "src/core/background.js"
   },
   "description": "__MSG_appDesc__",
   "manifest_version": 3,
   "name": "__MSG_appName__",
   "options_ui": {
     "open_in_tab": true,
-    "page": "options.html"
+    "page": "src/ui/options.html"
   },
   "icons": {
     "16": "images/icon16.png",
@@ -48,7 +48,7 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "options.html"
+        "src/ui/options.html"
       ],
       "matches": [
         "https://*.dogecraft.net/*",
