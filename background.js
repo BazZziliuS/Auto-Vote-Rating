@@ -5,25 +5,7 @@ const state = self.serviceWorker.state
 importScripts('libs/idb.umd.js')
 importScripts('projects.js')
 importScripts('main.js')
-importScripts('utils/constants.js')
-importScripts('utils/time.js')
-importScripts('utils/project.js')
-importScripts('utils/retry.js')
-importScripts('utils/database-helpers.js')
-importScripts('utils/opened-projects-manager.js')
-importScripts('utils/alarms.js')
-importScripts('utils/vote-time-calculator.js')
-importScripts('utils/vote-result-handler.js')
-importScripts('utils/stats-updater.js')
-importScripts('utils/silent-vote-handler.js')
-importScripts('utils/tab-manager.js')
-importScripts('utils/message-handlers.js')
-importScripts('utils/notifications.js')
-importScripts('utils/cookies-manager.js')
-importScripts('utils/error-handler.js')
-importScripts('utils/url-matchers.js')
-importScripts('utils/end-vote-helpers.js')
-importScripts('utils/console-interceptor.js')
+importScripts('utils/index.js')
 
 // TODO отложенный importScripts пока не работают, подробнее https://bugs.chromium.org/p/chromium/issues/detail?id=1198822
 self.addEventListener('install', () => {
@@ -31,9 +13,6 @@ self.addEventListener('install', () => {
     importScripts('scripts/mcserver-list.eu_silentvote.js', 'scripts/misterlauncher.org_silentvote.js', 'scripts/serverpact.com_silentvote.js', 'scripts/genshindrop.com_silentvote.js', 'scripts/bloodrust.com_silentvote.js')
 })
 
-//Текущие fetch запросы
-// noinspection ES6ConvertVarToLetConst
-// var fetchProjects = new Map()
 //ID группы вкладок в которой сейчас открыты вкладки расширения
 let groupId
 //Если этот браузер не поддерживает группировку вкладок
