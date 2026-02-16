@@ -125,3 +125,41 @@ function cleanupExpiredQueue(openedProjects) {
     }
     return removed
 }
+
+/**
+ * Обрабатывает конфликты с уже открытыми проектами
+ * @async
+ * @param {Object} project - Новый проект для голосования
+ * @param {Map} openedProjects - Map открытых проектов
+ * @param {IDBTransaction} transaction - Транзакция базы данных
+ * @param {Object} settings - Настройки расширения
+ * @param {IDBPDatabase} db - База данных
+ * @returns {Promise<boolean>} true если нужно прервать выполнение
+ */
+async function handleProjectConflicts(project, openedProjects, transaction, settings, db) {
+    for (let [tab, value] of openedProjects) {
+        if (hasConflict(project, value, settings)) {
+            if (!canRestart(tab, value, settings)) {
+                return true // Прерываем выполнение
+            }
+
+            // Можем перезапустить - закрываем старый проект
+            openedProjects.delete(tab)
+            db.put('other', openedProjects, 'openedProjects')
+
+            const projectTimeout = await transaction.objectStore('projects').get(value.key)
+            if (!value.nextAttempt) {
+                console.warn(getProjectPrefix(projectTimeout, true), 'nextAttempt is undefined, maybe it\'s an error')
+            }
+            console.warn(getProjectPrefix(projectTimeout, true), chrome.i18n.getMessage('timeout'))
+            sendNotification(getProjectPrefix(projectTimeout, false), chrome.i18n.getMessage('timeout'), 'warn', 'openProject_' + project.key)
+
+            if (!settings.disableCloseTabsOnError) {
+                tryCloseTab(tab, projectTimeout, 0)
+            }
+            break
+        }
+    }
+
+    return false // Продолжаем выполнение
+}

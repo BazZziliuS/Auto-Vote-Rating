@@ -169,29 +169,9 @@ async function checkOpen(project, transaction) {
         db.put('other', openedProjects, 'openedProjects')
     }
 
-    // Проверка конфликтов с уже открытыми проектами
-    for (let [tab, value] of openedProjects) {
-        if (hasConflict(project, value, settings)) {
-            if (!canRestart(tab, value, settings)) {
-                return
-            }
-
-            // Можем перезапустить - закрываем старый проект
-            openedProjects.delete(tab)
-            db.put('other', openedProjects, 'openedProjects')
-
-            const projectTimeout = await transaction.objectStore('projects').get(value.key)
-            if (!value.nextAttempt) {
-                console.warn(getProjectPrefix(projectTimeout, true), 'nextAttempt is undefined, maybe it\'s an error')
-            }
-            console.warn(getProjectPrefix(projectTimeout, true), chrome.i18n.getMessage('timeout'))
-            sendNotification(getProjectPrefix(projectTimeout, false), chrome.i18n.getMessage('timeout'), 'warn', 'openProject_' + project.key)
-
-            // noinspection JSIgnoredPromiseFromCall
-            if (!settings.disableCloseTabsOnError) tryCloseTab(tab, projectTimeout, 0)
-            break
-        }
-    }
+    // Проверка и обработка конфликтов с уже открытыми проектами
+    const shouldStop = await handleProjectConflicts(project, openedProjects, transaction, settings, db)
+    if (shouldStop) return
 
     // Очистка временных полей и создание объекта opened
     cleanupProjectTempFields(project)
