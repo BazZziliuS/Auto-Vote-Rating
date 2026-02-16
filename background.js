@@ -571,36 +571,6 @@ function updateListeners(enable) {
 // после инициализации базы данных если обнаруживается что сейчас мы не голосуем и нет необходимости голосовать - мы разрегистрируем слушатели
 updateListeners(true)
 
-// async function _fetch(url, options, project) {
-//     let listener
-//     const removeListener = ()=>{
-//         if (listener) {
-//             chrome.webRequest.onBeforeRequest.removeListener(listener)
-//             listener = null
-//         }
-//     }
-//
-//     listener = (details)=>{
-//         //Да это костыль, а есть другой адекватный вариант достать requestId или хотя бы код ошибки net::ERR из fetch запроса?
-//         // noinspection JSUnresolvedVariable
-//         if ((details.initiator && details.initiator.includes(self.location.hostname) || (details.originUrl && details.originUrl.includes(self.location.hostname))) && details.url.includes(url)) {
-//             fetchProjects.set(details.requestId, project)
-//             removeListener()
-//         }
-//     }
-//     chrome.webRequest.onBeforeRequest.addListener(listener, {urls: ['<all_urls>']})
-//
-//     if (!options) options = {}
-//
-//     try {
-//         return await fetch(url, options)
-//     } catch(error) {
-//         throw error
-//     } finally {
-//         removeListener()
-//     }
-// }
-
 //Слушатель сообщений и ошибок
 chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
     // noinspection JSIgnoredPromiseFromCall
@@ -856,24 +826,8 @@ chrome.runtime.onInstalled.addListener(async function (details) {
         chrome.runtime.sendMessage({installed: true})
     } else if (details.reason === 'update') {
         checkVote()
-    }/* else if (details.reason === 'update' && details.previousVersion && (new Version(details.previousVersion)).compareTo(new Version('6.0.0')) === -1) {
-
-    }*/
+    }
 })
-
-// function Version(s){
-//   this.arr = s.split('.').map(Number)
-// }
-// Version.prototype.compareTo = function(v){
-//     for (let i=0; ;i++) {
-//         if (i>=v.arr.length) return i>=this.arr.length ? 0 : 1
-//         if (i>=this.arr.length) return -1
-//         const diff = this.arr[i]-v.arr[i]
-//         if (diff) return diff>0 ? 1 : -1
-//     }
-// }
-
-
 
 /*
 Открытый репозиторий:
