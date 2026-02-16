@@ -588,31 +588,7 @@ async function endVote(request, sender, project) {
 
 
 chrome.notifications.onClicked.addListener(async function (notificationId) {
-    if (notificationId.startsWith('openTab_')) {
-        try {
-            const tabId = Number(notificationId.replace('openTab_', ''))
-            if (!tabId) return
-            const tab = await chrome.tabs.update(tabId, {active: true})
-            if (!tab) return
-            await chrome.windows.update(tab.windowId, {focused: true})
-        } catch (error) {
-            if (!error.message.includes('No tab with id')) {
-                console.warn('Ошибка при фокусировке на вкладку', error.message)
-            }
-        }
-    } else if (notificationId.startsWith('openProject_')) {
-        try {
-            const projectKey = Number(notificationId.replace('openProject_', ''))
-            const found = await db.count('projects', projectKey)
-            if (!found) return
-            await openOptionsPage()
-            await chrome.runtime.sendMessage({openProject: projectKey})
-        } catch (error) {
-            console.warn('Ошибка открытия настроек с определённым проектом', error.message)
-        }
-    } else if (notificationId.startsWith('openSettings')) {
-        await chrome.runtime.openOptionsPage()
-    }
+    await handleNotificationClick(notificationId, db, openOptionsPage)
 })
 
 async function openOptionsPage() {
