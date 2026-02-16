@@ -284,60 +284,17 @@ const webNavigationOnCommittedListener = function (details) {
     let opened = openedProjects.get(details.tabId)
     if (!opened) return
     if (details.url.startsWith('blob:')) return
-    const filesIsolated = []
-    const filesMain = []
-    if (details.frameId === 0) {
-        // Через эти сайты пользователь может авторизоваться, я пока не поддерживаю автоматическую авторизацию, не мешаем ему в авторизации
-        if (isAuthUrl(details.url)) {
-            return
-        }
-        // Если пользователь авторизовывается через эти сайты, но у расширения на это нет прав, всё равно не мешаем ему, пускай сам авторизуется не смотря, на то что есть автоматизация авторизации
-        // if (details.url.match(/vk.com\/*/) || details.url.match(/discord.com\/*/) || details.url.startsWith('https://steamcommunity.com/openid/login') || details.url.startsWith('https://steamcommunity.com/login/home')) {
-        //     // noinspection JSUnresolvedFunction
-        //     let granted = await chrome.permissions.contains({origins: [details.url]})
-        //     if (!granted) {
-        //         return
-        //     }
-        // }
 
-        filesMain.push('scripts/main/visible.js')
-        if (allProjects[getDomainWithoutSubdomain(details.url)]?.needIsTrusted?.()) {
-            filesIsolated.push('scripts/main/istrusted_isolated.js')
-            filesMain.push('scripts/main/istrusted_main.js')
-        }
-        if (!allProjects[getDomainWithoutSubdomain(details.url)]?.dontUseAlert?.()) {
-            filesIsolated.push('scripts/main/alert_isolated.js')
-            filesMain.push('scripts/main/alert_main.js')
-        }
-    } else if (isCaptchaUrlForCommitted(details.url)) {
-        filesMain.push('scripts/main/visible.js')
-        filesIsolated.push('scripts/main/alert_isolated.js')
-        filesMain.push('scripts/main/alert_main.js')
+    // Проверка URL авторизации
+    if (details.frameId === 0 && isAuthUrl(details.url)) {
+        return
     }
 
-    if (!filesIsolated.length && !filesMain.length) return
+    // Определение скриптов для инъекции
+    const {filesIsolated, filesMain} = determineScriptsToInject(details, getDomainWithoutSubdomain, isCaptchaUrlForCommitted, allProjects)
 
-    if (settings.debug) console.log('Injecting ' + JSON.stringify(filesIsolated) + ', ' + JSON.stringify(filesMain) + ' to ' + details.url)
-
-    let target = {tabId: details.tabId}
-    if (details.frameId) target.frameIds = [details.frameId]
-
-    if (filesIsolated.length) {
-        chrome.scripting.executeScript({target, files: filesIsolated, injectImmediately: true}, () => {
-            const error = chrome.runtime.lastError
-            if (error) {
-                catchTabError(error, opened, db)
-            }
-        })
-    }
-    if (filesMain.length) {
-        chrome.scripting.executeScript({target, files: filesMain, world: 'MAIN', injectImmediately: true}, () => {
-            const error = chrome.runtime.lastError
-            if (error) {
-                catchTabError(error, opened, db)
-            }
-        })
-    }
+    // Выполнение инъекции
+    executeScriptInjection(details.tabId, details.frameId, filesIsolated, filesMain, catchTabError, opened, db, settings.debug, details.url)
 }
 
 //Слушатель на обновление вкладок, если вкладка полностью загрузилась, загружает туда скрипт который сам нажимает кнопку проголосовать
@@ -348,63 +305,22 @@ const webNavigationOnCompletedListener = async function (details) {
     if (!opened) return
 
     if (details.frameId === 0) {
-        // Через эти сайты пользователь может авторизоваться, я пока не поддерживаю автоматическую авторизацию, не мешаем ему в авторизации
+        // Проверка URL авторизации
         if (isAuthUrl(details.url)) {
             return
         }
+
         const project = await db.get('projects', opened.key)
 
-
-        // Если пользователь авторизовывается через эти сайты, но у расширения на это нет прав, всё равно не мешаем ему, пускай сам авторизуется не смотря, на то что есть автоматизация авторизации
-        // if (details.url.match(/vk.com\/*/) || details.url.match(/discord.com\/*/) || details.url.startsWith('https://steamcommunity.com/openid/login') || details.url.startsWith('https://steamcommunity.com/login/home')) {
-        //     // noinspection JSUnresolvedFunction
-        //     let granted = await chrome.permissions.contains({origins: [details.url]})
-        //     if (!granted) {
-        //         console.warn(getProjectPrefix(project, true), 'Not granted permissions for ' + details.url)
-        //         return
-        //     }
-        // }
-
+        // Проверка лимита попыток инъекции
         if (opened.countInject >= LIMITS.MAX_INJECT_ATTEMPTS) {
             endVote({tooManyVoteAttempts: true}, {tab: {id: details.tabId}, url: details.url}, opened)
             return
         }
 
+        // Инъекция скриптов голосования
         try {
-            if (allProjects[project.rating]?.needPrompt?.()) {
-                const funcPrompt = function (nick) {
-                    // noinspection JSUnusedLocalSymbols
-                    window.prompt = new Proxy(window.prompt, {
-                        apply(target, thisArg, argArray) {
-                            return nick
-                        }
-                    })
-                }
-                if (settings.debug) console.log('Injecting funcPrompt to ' + details.url)
-                await chrome.scripting.executeScript({
-                    target: {tabId: details.tabId},
-                    world: 'MAIN',
-                    func: funcPrompt,
-                    args: [project.nick]
-                })
-            }
-
-            if (settings.debug) console.log('Injecting scripts/' + project.rating.toLowerCase() + '.js, scripts/main/api.js to ' + details.url)
-            await chrome.scripting.executeScript({
-                target: {tabId: details.tabId},
-                files: ['scripts/main/hacktimer.js', 'scripts/' + (project.ratingMain || project.rating) + '.js', 'scripts/main/api.js']
-            })
-            // noinspection JSUnresolvedVariable,JSUnresolvedFunction
-            if (allProjects[project.rating]?.needWorld?.()) {
-                if (settings.debug) console.log('Injecting scripts/' + project.rating.toLowerCase() + '_world.js to ' + details.url + ' in MAIN world')
-                await chrome.scripting.executeScript({
-                    target: {tabId: details.tabId},
-                    world: 'MAIN',
-                    files: ['scripts/' + (project.ratingMain || project.rating) + '_world.js']
-                })
-            }
-
-            await chrome.tabs.sendMessage(details.tabId, {sendProject: true, project, settings})
+            await injectVoteScripts(details.tabId, project, settings, allProjects, settings.debug, details.url)
 
             if (openedProjects.has(details.tabId)) {
                 opened.countInject++
@@ -414,24 +330,11 @@ const webNavigationOnCompletedListener = async function (details) {
             catchTabError(error, project, db)
         }
     } else if (details.frameId !== 0 && isCaptchaUrl(details.url)) {
-
+        // Инъекция скриптов капчи
         const project = await db.get('projects', opened.key)
 
         try {
-            if (settings.debug) console.log('Injecting scripts/main/captchaclicker.js to ' + details.url)
-            await chrome.scripting.executeScript({
-                target: {tabId: details.tabId, frameIds: [details.frameId]},
-                files: ['scripts/main/hacktimer.js', 'scripts/main/audio_captcha.js', 'scripts/main/captchaclicker.js']
-            })
-
-            // Если вкладка уже загружена, повторно туда высылаем sendProject который обозначает что мы готовы к голосованию
-            const tab = await chrome.tabs.get(details.tabId)
-            // TODO костыльная совместимость с Kiwi Browser, данный браузер в tab.status отдаёт undefined, нам ничего не остаётся кроме как игнорировать данный факт и голосовать как есть
-            // не работоспособность данной проверки может привести к тому что капча может быть решена раньше чем страница загружена но такое обстоятельство весьма редкое
-            // расширение отошлёт сообщение о пройденной капче ещё не внедрённому скрипту голосования что приведёт к зависанию голосования
-            // например сайт ionmc.top загружает капчу раньше чем страница загрузилась
-            if (tab.status != null && tab.status !== 'complete') return
-            await chrome.tabs.sendMessage(details.tabId, {sendProject: true, project, settings})
+            await injectCaptchaScripts(details.tabId, details.frameId, project, settings, settings.debug, details.url)
         } catch (error) {
             catchTabError(error, project, db)
         }
