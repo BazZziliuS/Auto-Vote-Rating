@@ -22,6 +22,7 @@ importScripts('utils/notifications.js')
 importScripts('utils/cookies-manager.js')
 importScripts('utils/error-handler.js')
 importScripts('utils/url-matchers.js')
+importScripts('utils/end-vote-helpers.js')
 importScripts('utils/console-interceptor.js')
 
 // TODO отложенный importScripts пока не работают, подробнее https://bugs.chromium.org/p/chromium/issues/detail?id=1198822
@@ -732,48 +733,20 @@ async function onRuntimeMessage(request, sender, sendResponse) {
 
 //Завершает голосование, если есть ошибка то обрабатывает её
 async function endVote(request, sender, project) {
-    let timeout = settings.timeout
+    const timeout = settings.timeout
 
-    let opened
-    for (const [tab, value] of openedProjects) {
-        if (project.key === value.key) {
-            if (!Number.isInteger(tab) && !tab.startsWith('background_') && !tab.startsWith('start_')) {
-                console.warn('A double attempt to complete the vote? endVote, has openedProjects', JSON.stringify(request), JSON.stringify(sender), JSON.stringify(project))
-                return
-            } else {
-                opened = createQueuedProject(value, timeout, project)
-                openedProjects.set('queue_' + opened.key, opened)
-                openedProjects.delete(tab)
-                db.put('other', openedProjects, 'openedProjects')
-            }
-            break
-        }
-    }
-    if (!opened) {
-        console.warn('A double attempt to complete the vote? endVote, not found openedProjects', JSON.stringify(request), JSON.stringify(sender), JSON.stringify(project))
-        return
-    }
+    // Найти и подготовить opened проект
+    const opened = findAndPrepareOpenedProject(openedProjects, project, timeout, db)
+    if (!opened) return
 
+    // Получить актуальные данные проекта
     project = await db.get('projects', project.key)
 
-    if (!request.successfully && request.later == null) {
-        if (sender?.url || request.url) {
-            const url = sender?.url || request.url
-            const domain = getDomainWithoutSubdomain(url)
-            // Если мы попали не по адресу, ну значит не надо отсылать отчёт об ошибке
-            if (domain !== project.rating) {
-                request.incorrectDomain = domain
-            }
-        }
-    }
+    // Проверить неправильный домен
+    checkIncorrectDomain(request, sender, project)
 
-    if (sender && !request.closedTab) {
-        if (!request.successfully && request.later == null) {
-            if (!settings.disableCloseTabsOnError) tryCloseTab(sender.tab.id, project, 0)
-        } else {
-            if (!settings.disableCloseTabsOnSuccess) tryCloseTab(sender.tab.id, project, 0)
-        }
-    }
+    // Закрыть вкладку при необходимости
+    closeTabIfNeeded(request, sender, project, settings)
 
     // for (const[key,value] of fetchProjects) {
     //     if (value.key === project.key) {

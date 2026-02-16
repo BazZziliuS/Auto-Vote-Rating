@@ -2,7 +2,7 @@
 
 Директория содержит переиспользуемые модули для расширения Auto Vote Rating.
 
-## 📁 Структура модулей (18 модулей)
+## 📁 Структура модулей (19 модулей)
 
 ```
 utils/
@@ -25,6 +25,7 @@ utils/
 ├── cookies-manager.js            # 🍪 Управление cookies
 ├── error-handler.js              # ⚠️ Обработка ошибок
 ├── url-matchers.js               # 🔗 Проверка и сопоставление URL
+├── end-vote-helpers.js           # 🏁 Helper функции для endVote
 └── console-interceptor.js        # 📝 Логирование
 ```
 
@@ -211,6 +212,20 @@ utils/
 
 ---
 
+### 🏁 Завершение голосования
+
+#### `end-vote-helpers.js`
+Helper функции для функции endVote.
+
+**Функции:**
+- `checkIncorrectDomain(request, sender, project)` - Проверяет и добавляет информацию о неправильном домене
+- `closeTabIfNeeded(request, sender, project, settings)` - Закрывает вкладку в зависимости от результата
+- `findAndPrepareOpenedProject(openedProjects, project, timeout, db)` - Находит и подготавливает opened проект
+
+**Используется в:** background.js (endVote)
+
+---
+
 ### 🔗 Проверка URL
 
 #### `url-matchers.js`
@@ -355,6 +370,7 @@ importScripts('utils/notifications.js')
 importScripts('utils/cookies-manager.js')        // Управление cookies
 importScripts('utils/error-handler.js')          // Обработка ошибок
 importScripts('utils/url-matchers.js')           // Проверка URL
+importScripts('utils/end-vote-helpers.js')       // Helper endVote
 importScripts('utils/console-interceptor.js')    // Последним - перехват console
 ```
 
