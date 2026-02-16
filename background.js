@@ -823,23 +823,8 @@ async function endVote(request, sender, project) {
     await db.put('other', todayStats, 'todayStats')
     await updateValue('projects', project)
 
-    await chrome.alarms.clear('nextAttempt_' + project.key)
-    if (project.time != null && project.time > Date.now()) {
-        let create2 = true
-        let when = project.time
-        if (when - Date.now() < TIME.MIN_ALARM_DELAY) when = Date.now() + TIME.MIN_ALARM_DELAY
-        const alarms = await chrome.alarms.getAll()
-        for (const alarm of alarms) {
-            // noinspection JSCheckFunctionSignatures
-            if (!isNaN(alarm.name) && alarm.scheduledTime === when) {
-                create2 = false
-                break
-            }
-        }
-        if (create2) {
-            await createSafeAlarm(String(project.key), when, project)
-        }
-    }
+    // Планируем alarm для следующего голосования
+    await scheduleProjectAlarm(project)
 
     async function removeQueue() {
         for (const [tab, value] of openedProjects) {
