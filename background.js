@@ -748,12 +748,6 @@ async function endVote(request, sender, project) {
     // Закрыть вкладку при необходимости
     closeTabIfNeeded(request, sender, project, settings)
 
-    // for (const[key,value] of fetchProjects) {
-    //     if (value.key === project.key) {
-    //         fetchProjects.delete(key)
-    //     }
-    // }
-
     // Повторно достаём project так как за время отправки отчёта или использования удалённого кода он мог измениться
     project = await db.get('projects', project.key)
 
@@ -819,9 +813,8 @@ async function endVote(request, sender, project) {
         updateErrorStats(project, generalStats, todayStats)
     }
 
-    await db.put('other', generalStats, 'generalStats')
-    await db.put('other', todayStats, 'todayStats')
-    await updateValue('projects', project)
+    // Сохраняем статистику и проект
+    await saveStatsAndProject(db, generalStats, todayStats, project)
 
     // Планируем alarm для следующего голосования
     await scheduleProjectAlarm(project)

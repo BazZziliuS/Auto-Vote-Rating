@@ -110,3 +110,18 @@ function initializeStatsBeforeVote(project, generalStats, todayStats) {
     checkAndUpdateGeneralMonthlyStats(generalStats)
     return checkAndUpdateDailyStats(todayStats)
 }
+
+/**
+ * Сохраняет статистику и проект после завершения голосования
+ * @async
+ * @param {IDBPDatabase} db - База данных
+ * @param {Object} generalStats - Общая статистика
+ * @param {Object} todayStats - Статистика за сегодня
+ * @param {Object} project - Объект проекта
+ * @returns {Promise<void>}
+ */
+async function saveStatsAndProject(db, generalStats, todayStats, project) {
+    await db.put('other', generalStats, 'generalStats')
+    await db.put('other', todayStats, 'todayStats')
+    await updateStoreValue(db, 'projects', project)
+}
