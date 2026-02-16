@@ -5,6 +5,21 @@ const state = self.serviceWorker.state
 importScripts('libs/idb.umd.js')
 importScripts('projects.js')
 importScripts('main.js')
+importScripts('utils/constants.js')
+importScripts('utils/time.js')
+importScripts('utils/project.js')
+importScripts('utils/retry.js')
+importScripts('utils/database-helpers.js')
+importScripts('utils/opened-projects-manager.js')
+importScripts('utils/alarms.js')
+importScripts('utils/vote-time-calculator.js')
+importScripts('utils/vote-result-handler.js')
+importScripts('utils/stats-updater.js')
+importScripts('utils/silent-vote-handler.js')
+importScripts('utils/tab-manager.js')
+importScripts('utils/message-handlers.js')
+importScripts('utils/notifications.js')
+importScripts('utils/console-interceptor.js')
 
 // TODO отложенный importScripts пока не работают, подробнее https://bugs.chromium.org/p/chromium/issues/detail?id=1198822
 self.addEventListener('install', () => {
@@ -31,7 +46,12 @@ let silentResponseBody = {}
 const initializeFunc = initializeConfig(true)
 initializeFunc.finally(() => initializeFunc.done = true)
 
-//Проверка: нужно ли голосовать, сверяет время текущее с временем из конфига
+/**
+ * Проверяет необходимость голосования для всех проектов
+ * Сверяет текущее время с временем из конфигурации каждого проекта
+ * @async
+ * @returns {Promise<void>}
+ */
 async function checkVote() {
 
     await initializeFunc
@@ -49,7 +69,7 @@ async function checkVote() {
             db.put('other', onLine, 'onLine')
         } else {
             // TODO к сожалению в Service Worker отсутствует слушатель на восстановление соединения с интернетом, у нас остаётся только 1 вариант, это попытаться снова запустить checkVote через минуту
-            chrome.alarms.create('checkVote', {when: Date.now() + 65000})
+            chrome.alarms.create('checkVote', {when: Date.now() + TIME.MIN_ALARM_DELAY})
             return
         }
     }
@@ -100,6 +120,12 @@ chrome.idle.onStateChanged.addListener(async function (newState) {
     }
 })
 
+/**
+ * Перезагружает все будильники для проектов
+ * Очищает старые алармы и создает новые на основе текущих данных проектов
+ * @async
+ * @returns {Promise<void>}
+ */
 async function reloadAllAlarms() {
     await chrome.alarms.clearAll()
     let cursor = await db.transaction('projects').store.openCursor()
@@ -108,7 +134,7 @@ async function reloadAllAlarms() {
         const project = cursor.value
         if (project.time != null && project.time > Date.now() && times.indexOf(project.time) === -1) {
             let when = project.time
-            if (when - Date.now() < 65000) when = Date.now() + 65000
+            if (when - Date.now() < TIME.MIN_ALARM_DELAY) when = Date.now() + TIME.MIN_ALARM_DELAY
             try {
                 chrome.alarms.create(String(cursor.key), {when})
             } catch (error) {
@@ -123,70 +149,64 @@ async function reloadAllAlarms() {
 
 let promises = []
 
+/**
+ * Проверяет возможность запуска голосования для проекта
+ * Валидирует состояние интернета, открытые вкладки и запускает процесс голосования
+ * @async
+ * @param {Object} project - Объект проекта для голосования
+ * @param {IDBTransaction} transaction - Транзакция базы данных
+ * @returns {Promise<void>}
+ */
 async function checkOpen(project, transaction) {
     //Если нет интернета, то не голосуем
-    if (!settings.disabledCheckInternet) {
-        if (!navigator.onLine && onLine) {
-            // TODO к сожалению в Service Worker отсутствует слушатель на восстановление соединения с интернетом, у нас остаётся только 1 вариант, это попытаться снова запустить checkVote через минуту
-            chrome.alarms.create('checkVote', {when: Date.now() + 65000})
+    if (settings.disabledCheckInternet) {
+        // Проверка интернета отключена, пропускаем
+    } else if (!navigator.onLine && onLine) {
+        // TODO к сожалению в Service Worker отсутствует слушатель на восстановление соединения с интернетом, у нас остаётся только 1 вариант, это попытаться снова запустить checkVote через минуту
+        chrome.alarms.create('checkVote', {when: Date.now() + TIME.MIN_ALARM_DELAY})
 
-            sendNotification(getProjectPrefix(project, false), chrome.i18n.getMessage('internetDisconnected'), 'error', 'openProject_' + project.key)
-            console.warn(getProjectPrefix(project, true), chrome.i18n.getMessage('internetDisconnected'))
-            onLine = false
-            db.put('other', onLine, 'onLine')
-            return
-        } else if (!onLine) {
-            return
-        }
+        sendNotification(getProjectPrefix(project, false), chrome.i18n.getMessage('internetDisconnected'), 'error', 'openProject_' + project.key)
+        console.warn(getProjectPrefix(project, true), chrome.i18n.getMessage('internetDisconnected'))
+        onLine = false
+        db.put('other', onLine, 'onLine')
+        return
+    } else if (!onLine) {
+        return
     }
 
+    // Очистка истекших записей из очереди
+    const removed = cleanupExpiredQueue(openedProjects)
+    if (removed.length > 0) {
+        db.put('other', openedProjects, 'openedProjects')
+    }
+
+    // Проверка конфликтов с уже открытыми проектами
     for (let [tab, value] of openedProjects) {
-        if (value.timeoutQueue && Date.now() >= value.timeoutQueue) {
+        if (hasConflict(project, value, settings)) {
+            if (!canRestart(tab, value, settings)) {
+                return
+            }
+
+            // Можем перезапустить - закрываем старый проект
             openedProjects.delete(tab)
             db.put('other', openedProjects, 'openedProjects')
-            continue
-        }
-        if (project.rating === value.rating || (value.randomize && project.randomize) || settings.disabledOneVote) {
-            if (settings.disabledRestartOnTimeout || tab.startsWith?.('queue_') || Date.now() < value.nextAttempt) {
-                return
-            } else {
-                openedProjects.delete(tab)
-                db.put('other', openedProjects, 'openedProjects')
 
-                const projectTimeout = await transaction.objectStore('projects').get(value.key)
-                if (!value.nextAttempt) {
-                    console.warn(getProjectPrefix(projectTimeout, true), 'nextAttempt is undefined, maybe it\'s an error')
-                }
-                console.warn(getProjectPrefix(projectTimeout, true), chrome.i18n.getMessage('timeout'))
-                sendNotification(getProjectPrefix(projectTimeout, false), chrome.i18n.getMessage('timeout'), 'warn', 'openProject_' + project.key)
-
-                // noinspection JSIgnoredPromiseFromCall
-                if (!settings.disableCloseTabsOnError) tryCloseTab(tab, projectTimeout, 0)
-                break
+            const projectTimeout = await transaction.objectStore('projects').get(value.key)
+            if (!value.nextAttempt) {
+                console.warn(getProjectPrefix(projectTimeout, true), 'nextAttempt is undefined, maybe it\'s an error')
             }
+            console.warn(getProjectPrefix(projectTimeout, true), chrome.i18n.getMessage('timeout'))
+            sendNotification(getProjectPrefix(projectTimeout, false), chrome.i18n.getMessage('timeout'), 'warn', 'openProject_' + project.key)
+
+            // noinspection JSIgnoredPromiseFromCall
+            if (!settings.disableCloseTabsOnError) tryCloseTab(tab, projectTimeout, 0)
+            break
         }
     }
 
-    delete project.timeoutQueue
-    delete project.nextAttempt
-    delete project.countInject
-
-    const opened = {}
-    opened.key = project.key
-    opened.rating = project.rating
-    opened.countInject = 0
-    if (project.randomize) opened.randomize = project.randomize
-
-    if (!settings.disabledRestartOnTimeout) {
-        let retryCoolDown
-        if (project.randomize) {
-            retryCoolDown = Math.floor(Math.random() * 600000 + 1800000)
-        } else {
-            if (!settings.timeoutVote) settings.timeoutVote = 900000
-            retryCoolDown = settings.timeoutVote
-        }
-        opened.nextAttempt = Date.now() + retryCoolDown
-    }
+    // Очистка временных полей и создание объекта opened
+    cleanupProjectTempFields(project)
+    const opened = createOpenedProject(project, settings)
 
     // Голосование запускается впервые
     if (!openedProjects.size) {
@@ -273,7 +293,7 @@ async function newWindow(project, opened) {
         }
         if (create) {
             let when = opened.nextAttempt
-            if (when - Date.now() < 65000) when = Date.now() + 65000
+            if (when - Date.now() < TIME.MIN_ALARM_DELAY) when = Date.now() + TIME.MIN_ALARM_DELAY
             try {
                 await chrome.alarms.create('nextAttempt_' + project.key, {when})
             } catch (error) {
@@ -314,8 +334,9 @@ async function newWindow(project, opened) {
         if (notSupportedGroupTabs) return
         try {
             await promiseGroup
-            promiseGroup = groupTabs(tab)
-            await promiseGroup
+            promiseGroup = groupTabIntoAutoVoteGroup(tab, groupId)
+            const newGroupId = await promiseGroup
+            if (newGroupId !== null) groupId = newGroupId
         } catch (error) {
             if (error.message === 'Tabs cannot be edited right now (user may be dragging a tab).') {
                 console.warn(getProjectPrefix(project, true), 'Error when grouping tabs,', error.message)
@@ -327,159 +348,24 @@ async function newWindow(project, opened) {
     }
 }
 
-async function checkWindow(project) {
-    const windows = await chrome.windows.getAll()
-        .catch(error => console.warn(chrome.i18n.getMessage('errorOpenTab', error.message)))
-    if (!windows?.length) {
-        try {
-            const window = await chrome.windows.create({focused: false})
-            await chrome.windows.update(window.id, {focused: false, drawAttention: false})
-        } catch (error) {
-            endVote({errorOpenTab: error.message}, null, project)
-            return false
-        }
-    }
-    return true
-}
+// Функции checkWindow и groupTabs перенесены в utils/tab-manager.js
+// checkWindow → checkWindow
+// groupTabs → groupTabIntoAutoVoteGroup
 
-async function groupTabs(tab) {
-    // С начало ищем группу вкладок
-    if (groupId == null) {
-        const groups = await chrome.tabGroups.query({title: 'Auto Vote Rating'})
-        if (groups.length) groupId = groups[0].id
-    }
-
-    // Потом пробуем сгруппировать если нашли группу
-    if (groupId != null) {
-        try {
-            await tryGroupTabs({groupId, tabIds: tab.id}, 0)
-            return
-        } catch (error) {
-            if (!error.message.includes('No tab with id') && !error.message.includes('No group with id')) {
-                throw error
-            }
-        }
-    }
-
-    // Если мы не нашли групп или не смогли сгруппировать так как нет уже такой группы, то только тогда создаём эту группу
-    try {
-        groupId = await tryGroupTabs({tabIds: tab.id}, 0)
-        await chrome.tabGroups.update(groupId, {color: 'blue', title: 'Auto Vote Rating'})
-    } catch (error) {
-        if (!error.message.includes('No tab with id') && !error.message.includes('No group with id')) {
-            throw error
-        }
-    }
-}
-
+/**
+ * Выполняет silent vote для проекта
+ * Обертка над модульной функцией для совместимости
+ */
 async function silentVote(project) {
-    if (!self.DOMParser) {
-        importScripts('libs/linkedom.js')
-    }
-    try {
-        if (project.rating === 'Custom') {
-            let response = await fetch(project.responseURL, {...project.body})
-            await response.text()
-            if (response.ok) {
-                endVote({successfully: true}, null, project)
-            } else {
-                endVote({errorVote: [String(response.status), response.url]}, null, project)
-            }
-            return
-        }
-
-        if (!self['silentVote_' + (project.ratingMain || project.rating)]) {
-            importScripts('scripts/' + (project.ratingMain || project.rating) + '_silentvote.js')
-        }
-
-        await self['silentVote_' + (project.ratingMain || project.rating)](project)
-    } catch (error) {
-        if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError when attempting to fetch resource')) {
-            // let found = false
-            // for (const p of fetchProjects.values()) {
-            //     if (p.key === project.key) {
-            //         found = true
-            //         break
-            //     }
-            // }
-            // if (!found) {
-            endVote({notConnectInternet: true}, null, project)
-            // endVote({message: chrome.i18n.getMessage('errorVoteUnknown') + (error.stack ? error.stack : e)}, null, project)
-            // }
-        } else {
-            let message
-            if (error.stack) {
-                message = error.stack
-            } else {
-                message = error.message
-            }
-            const request = {}
-            request.errorVoteNoElement = message
-            if (silentResponseBody[project.rating]) {
-                request.html = silentResponseBody[project.rating].doc.body.outerHTML
-                request.url = silentResponseBody[project.rating].url
-            }
-            endVote(request, null, project)
-        }
-    } finally {
-        delete silentResponseBody[project.rating]
-    }
+    await executeSilentVote(project, silentResponseBody)
 }
 
+/**
+ * Проверяет ответ на ошибки
+ * Обертка над модульной функцией для совместимости
+ */
 async function checkResponseError(project, response, url, bypassCodes, vk) {
-    let host = extractHostname(response.url)
-    if (vk && (host.includes('vk.com') || host.includes('vk.ru'))) {
-        if (response.headers.get('Content-Type') && response.headers.get('Content-Type').includes('windows-1251')) {
-            //Почему не UTF-8?
-            response = await new Response(new TextDecoder('windows-1251').decode(await response.arrayBuffer()))
-        }
-    }
-    response.html = await response.text()
-    response.doc = new DOMParser().parseFromString(response.html, 'text/html')
-    silentResponseBody[project.rating] = {}
-    silentResponseBody[project.rating].doc = response.doc
-    silentResponseBody[project.rating].url = response.url
-    if (vk && (host.includes('vk.com') || host.includes('vk.ru'))) {
-        //Узнаём причину почему мы зависли на авторизации ВК
-        let text
-        if (response.doc.querySelector('div.oauth_form_access') != null) {
-            text = response.doc.querySelector('div.oauth_form_access').textContent.replace(response.doc.querySelector('div.oauth_access_items').textContent, '').trim()
-        } else if (response.doc.querySelector('div.oauth_content > div') != null) {
-            text = response.doc.querySelector('div.oauth_content > div').textContent
-        } else if (response.doc.querySelector('#login_blocked_wrap') != null) {
-            text = response.doc.querySelector('#login_blocked_wrap div.header').textContent + ' ' + response.doc.querySelector('#login_blocked_wrap div.content').textContent.trim()
-        } else if (response.doc.querySelector('div.login_blocked_panel') != null) {
-            text = response.doc.querySelector('div.login_blocked_panel').textContent.trim()
-        } else if (response.doc.querySelector('.profile_deleted_text') != null) {
-            text = response.doc.querySelector('.profile_deleted_text').textContent.trim()
-        } else if (response.html.length < 500) {
-            text = response.html
-        } else {
-            text = 'null'
-        }
-        endVote({errorAuthVK: text}, null, project)
-        return false
-    }
-    if (!host.includes(url)) {
-        endVote({message: chrome.i18n.getMessage('errorRedirected', response.url)}, null, project)
-        return false
-    }
-    if (bypassCodes) {
-        for (const code of bypassCodes) {
-            if (response.status === code) {
-                return true
-            }
-        }
-    }
-    if (!response.ok) {
-        endVote({errorVote: [String(response.status), response.url]}, null, project)
-        return false
-    }
-    if (response.statusText && response.statusText !== '' && response.statusText !== 'ok' && response.statusText !== 'OK') {
-        endVote(response.statusText, null, project)
-        return false
-    }
-    return true
+    return await validateSilentVoteResponse(project, response, url, bypassCodes, vk, silentResponseBody)
 }
 
 const webNavigationOnCommittedListener = function (details) {
@@ -593,7 +479,7 @@ const webNavigationOnCompletedListener = async function (details) {
         //     }
         // }
 
-        if (opened.countInject >= 10) {
+        if (opened.countInject >= LIMITS.MAX_INJECT_ATTEMPTS) {
             endVote({tooManyVoteAttempts: true}, {tab: {id: details.tabId}, url: details.url}, opened)
             return
         }
@@ -762,10 +648,11 @@ const webNavigationOnErrorOccurredListener = async function (details) {
     }
 }
 
-// Регистрация и разрегистрация слушателей сделана в целях оптимизации работы фонового процесса расширения
-// Фоновый процесс расширения слишком часто пробуждается лишний раз при веб сёрфинге (при использовании браузера пользователем)
-// поэтому если голосование в данный момент не происходит - мы отключаем все эти слушатели и спим
-// в случае если голосование запускается вновь - мы обратно регистрируем слушателей на время авто-голосования
+/**
+ * Управляет регистрацией/разрегистрацией слушателей событий
+ * Оптимизирует работу фонового процесса - отключает слушатели когда голосование не активно
+ * @param {boolean} enable - true для регистрации, false для разрегистрации слушателей
+ */
 function updateListeners(enable) {
     if (settings?.debug) console.log('Регистрация слушателей, включение', enable, 'openedProjects.size', openedProjects.size, 'openedProjects', openedProjects)
     if (enable) {
@@ -1035,47 +922,7 @@ async function triggerTimer(name, sender, fakeId) {
     }
 }
 
-async function tryOpenTab(request, project, attempt) {
-    try {
-        return await chrome.tabs.create(request)
-    } catch (error) {
-        if (error.message === 'Tabs cannot be edited right now (user may be dragging a tab).' && attempt < 3) {
-            await wait(500)
-            return await tryOpenTab(request, project, ++attempt)
-        }
-        endVote({errorOpenTab: error.message}, null, project)
-        return null
-    }
-}
-
-async function tryCloseTab(tabId, project, attempt) {
-    if (!Number.isInteger(tabId)) return
-    try {
-        await chrome.tabs.remove(tabId)
-    } catch (error) {
-        if (error.message === 'Tabs cannot be edited right now (user may be dragging a tab).' && attempt < 3) {
-            await wait(500)
-            await tryCloseTab(tabId, project, ++attempt)
-            return
-        }
-        if (!error.message.includes('No tab with id')) {
-            console.warn(getProjectPrefix(project, true), error.message)
-            sendNotification(getProjectPrefix(project, false), error.message, 'error', 'openProject_' + project.key)
-        }
-    }
-}
-
-async function tryGroupTabs(options, attempt) {
-    try {
-        return await chrome.tabs.group(options)
-    } catch (error) {
-        if (error.message === 'Tabs cannot be edited right now (user may be dragging a tab).' && attempt < 3) {
-            await wait(500)
-            return await tryGroupTabs(options, ++attempt)
-        }
-        throw error
-    }
-}
+// Функции tryOpenTab, tryCloseTab, tryGroupTabs перенесены в utils/tab-manager.js
 
 //Завершает голосование, если есть ошибка то обрабатывает её
 async function endVote(request, sender, project) {
@@ -1088,15 +935,7 @@ async function endVote(request, sender, project) {
                 console.warn('A double attempt to complete the vote? endVote, has openedProjects', JSON.stringify(request), JSON.stringify(sender), JSON.stringify(project))
                 return
             } else {
-                opened = value
-                if (opened.randomize) {
-                    timeout += Math.floor(Math.random() * (60000 - 10000) + 10000)
-                }
-                opened.timeoutQueue = Date.now() + timeout
-
-                delete opened.nextAttempt
-                delete opened.countInject
-
+                opened = createQueuedProject(value, timeout, project)
                 openedProjects.set('queue_' + opened.key, opened)
                 openedProjects.delete(tab)
                 db.put('other', openedProjects, 'openedProjects')
@@ -1274,7 +1113,7 @@ async function endVote(request, sender, project) {
             project.time = project.time + Math.floor(Math.random() * (project.randomize.max - project.randomize.min) + project.randomize.min)
         } else if ((project.rating === 'topcraft.ru' || project.rating === 'topcraft.club' || project.rating === 'mctop.su' || (project.rating === 'minecraftrating.ru' && project.listing === 'projects')) && !project.priority && project.timeoutHour == null) {
             //Рандомизация по умолчанию (в пределах 5-10 минут) для бедного TopCraft/McTOP который легко ддосится от массового автоматического голосования
-            project.time = project.time + Math.floor(Math.random() * (600000 - 300000) + 300000)
+            project.time = project.time + Math.floor(Math.random() * (TIME.MAX_RANDOMIZATION_DEFAULT - TIME.MIN_RANDOMIZATION_DEFAULT) + TIME.MIN_RANDOMIZATION_DEFAULT)
         }
 
         delete project.error
@@ -1339,7 +1178,7 @@ async function endVote(request, sender, project) {
         if (request.retryCoolDown) {
             retryCoolDown = request.retryCoolDown
         } else if ((request.errorVote && request.errorVote[0] === '404') || (request.message && project.rating === 'wargm.ru' && project.randomize)) {
-            retryCoolDown = 21600000
+            retryCoolDown = TIME.ERROR_404_COOLDOWN
         } else if (request.closedTab) {
             retryCoolDown = 60000
         } else {
@@ -1349,7 +1188,7 @@ async function endVote(request, sender, project) {
         sendMessage = message + '. ' + chrome.i18n.getMessage('errorNextVote', (Math.round(retryCoolDown / 1000 / 60 * 100) / 100).toString())
 
         if (project.randomize) {
-            retryCoolDown = retryCoolDown + Math.floor(Math.random() * 900000)
+            retryCoolDown = retryCoolDown + Math.floor(Math.random() * TIME.MAX_ERROR_RANDOMIZATION)
         }
         project.time = Date.now() + retryCoolDown
         project.error = message
@@ -1370,7 +1209,7 @@ async function endVote(request, sender, project) {
     if (project.time != null && project.time > Date.now()) {
         let create2 = true
         let when = project.time
-        if (when - Date.now() < 65000) when = Date.now() + 65000
+        if (when - Date.now() < TIME.MIN_ALARM_DELAY) when = Date.now() + TIME.MIN_ALARM_DELAY
         const alarms = await chrome.alarms.getAll()
         for (const alarm of alarms) {
             // noinspection JSCheckFunctionSignatures
@@ -1404,7 +1243,7 @@ async function endVote(request, sender, project) {
 
     // TODO мы не можем быть уверены что setTimeout в Service Worker 100% отработает, поэтому мы на всякий случай создаём chrome.alarm
     let alarmTimeout = timeout
-    if (alarmTimeout < 65000) alarmTimeout = 65000
+    if (alarmTimeout < TIME.MIN_ALARM_DELAY) alarmTimeout = TIME.MIN_ALARM_DELAY
     try {
         await chrome.alarms.create('checkVote', {when: Date.now() + alarmTimeout})
     } catch (error) {
@@ -1412,38 +1251,6 @@ async function endVote(request, sender, project) {
     }
 }
 
-//Отправитель уведомлений
-function sendNotification(title, message, type, notificationId) {
-    if (!message) message = ''
-    if (!notificationId) notificationId = ''
-
-    if (settings?.disabledNotifStart && type === 'start') return
-    if (settings?.disabledNotifInfo && type === 'info') return
-
-    if (type === 'warn' || type === 'error') {
-        (async () => {
-            try {
-                await chrome.runtime.sendMessage({notification: {title, message, type, notificationId}})
-            } catch (error) {
-                if (!error.message.includes('Could not establish connection. Receiving end does not exist') && !error.message.includes('The message port closed before a response was received')) {
-                    console.warn(error.message)
-                }
-            }
-        })()
-    }
-
-    if (settings?.disabledNotifWarn && type === 'warn') return
-    if (settings?.disabledNotifError && type === 'error') return
-
-    let notification = {
-        type: 'basic',
-        iconUrl: 'images/icon128.png',
-        title: title,
-        message: message
-    }
-    chrome.notifications.create(notificationId, notification, function () {
-    })
-}
 
 chrome.notifications.onClicked.addListener(async function (notificationId) {
     if (notificationId.startsWith('openTab_')) {
@@ -1479,57 +1286,25 @@ async function openOptionsPage() {
     const tab = await chrome.tabs.query({active: true, lastFocusedWindow: true})
     if (!tab.length) return
     if (tab[0].status !== 'complete') {
-        for (let i = 0; i < 9; i++) {
-            await wait(250)
+        for (let i = 0; i < LIMITS.MAX_TAB_LOAD_WAIT_CYCLES; i++) {
+            await wait(TIME.TAB_LOAD_CHECK_DELAY)
             const t = await chrome.tabs.get(tab[0].id)
             if (t.status === 'complete') break
         }
     }
 }
 
-function getProjectPrefix(project, detailed) {
-    let text = ''
-    if (project.nick && project.nick !== '') text += ' – ' + project.nick
-    if (detailed && project.game && project.game !== '') text += ' – ' + project.game
-    if (detailed) {
-        if (project.id && project.id !== '') text += ' – ' + project.id
-        if (project.name && project.name !== '') text += ' – ' + project.name
-    } else {
-        if (project.name && project.name !== '') {
-            text += ' – ' + project.name
-        } else if (project.id && project.id !== '') {
-            text += ' – ' + project.id
-        }
-    }
-    if (text === '') {
-        return '[' + project.rating + ']'
-    } else {
-        text = text.replace(' – ', '')
-        return '[' + project.rating + '] ' + text
-    }
-}
 
-function wait(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
 
+/**
+ * Обновляет значение в хранилище базы данных
+ * @async
+ * @param {string} objStore - Имя хранилища ('projects', 'other')
+ * @param {Object} value - Объект для обновления (должен содержать поле key)
+ * @returns {Promise<void>}
+ */
 async function updateValue(objStore, value) {
-    const store = db.transaction(objStore, 'readwrite').store
-    const found = await store.count(value.key)
-    if (found) {
-        await store.put(value, value.key);
-        (async () => {
-            try {
-                await chrome.runtime.sendMessage({updateValue: objStore, value})
-            } catch (error) {
-                if (!error.message.includes('Could not establish connection. Receiving end does not exist') && !error.message.includes('The message port closed before a response was received')) {
-                    console.error(error.message)
-                }
-            }
-        })();
-    } else {
-        console.warn('The ' + objStore + ' could not be found, it may have been deleted', JSON.stringify(value))
-    }
+    await updateStoreValue(db, objStore, value)
 }
 
 chrome.runtime.onInstalled.addListener(async function (details) {
@@ -1562,62 +1337,6 @@ chrome.runtime.onInstalled.addListener(async function (details) {
 // }
 
 
-/* Store the original log functions. */
-console._log = console.log
-console._info = console.info
-console._warn = console.warn
-console._error = console.error
-console._debug = console.debug
-
-/* Redirect all calls to the collector. */
-console.log = function () {
-    return console._intercept('log', arguments)
-}
-console.info = function () {
-    return console._intercept('info', arguments)
-}
-console.warn = function () {
-    return console._intercept('warn', arguments)
-}
-console.error = function () {
-    return console._intercept('error', arguments)
-}
-console.debug = function () {
-    return console._intercept('debug', arguments)
-}
-
-/* Give the developer the ability to intercept the message before letting
-   console-history access it. */
-console._intercept = function (type, args) {
-    // Your own code can go here, but the preferred method is to override this
-    // function in your own script, and add the line below to the end or
-    // begin of your own 'console._intercept' function.
-    // REMEMBER: Use only underscore console commands inside _intercept!
-    console._collect(type, args)
-}
-
-console._collect = function (type, args) {
-    const time = new Date().toLocaleString().replace(',', '')
-
-    if (!type) type = 'log'
-
-    if (!args || args.length === 0) return
-
-    console['_' + type].apply(console, args)
-
-    let log = '[' + time + ' ' + type.toUpperCase() + ']:'
-
-    for (let arg of args) {
-        if (arg?.stack) {
-            log += ' ' + arg.stack
-        } else {
-            if (typeof arg != 'string') arg = JSON.stringify(arg)
-            log += ' ' + arg
-        }
-    }
-
-    if (dbLogs) dbLogs.add('logs', log)
-}
 
 /*
 Открытый репозиторий:
