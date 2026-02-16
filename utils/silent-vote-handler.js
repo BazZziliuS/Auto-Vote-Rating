@@ -3,6 +3,24 @@
  */
 
 /**
+ * Определяет нужно ли использовать silent vote mode для проекта
+ * @param {Object} project - Объект проекта
+ * @param {Object} allProjects - Объект со всеми конфигурациями проектов
+ * @returns {boolean} true если нужен silent vote mode
+ */
+function shouldUseSilentVote(project, allProjects) {
+    if (project.rating === 'Custom') {
+        return true
+    }
+
+    if (!project.emulateMode && allProjects[project.rating]?.silentVote?.(project)) {
+        return true
+    }
+
+    return false
+}
+
+/**
  * Выполняет silent vote для проекта
  * @async
  * @param {Object} project - Объект проекта

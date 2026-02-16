@@ -224,13 +224,8 @@ async function newWindow(project, opened) {
         }
     }
 
-    let silentVoteMode = false
-    if (project.rating === 'Custom') {
-        silentVoteMode = true
-    } else if (!project.emulateMode && allProjects[project.rating].silentVote?.(project)) {
-        silentVoteMode = true
-    }
-    if (silentVoteMode) {
+    // Определяем режим голосования (silent или tab)
+    if (shouldUseSilentVote(project, allProjects)) {
         openedProjects.set('background_' + project.key, opened)
         openedProjects.delete('start_' + project.key)
         db.put('other', openedProjects, 'openedProjects')
