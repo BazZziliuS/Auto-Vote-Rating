@@ -371,11 +371,6 @@ const webRequestOnCompletedListener = async function (details) {
 
 const webRequestOnErrorOccurredListener = async function (details) {
     await initializeFunc
-    // noinspection JSUnresolvedVariable
-    /*if ((details.initiator && details.initiator.includes(self.location.hostname) || (details.originUrl && details.originUrl.includes(self.location.hostname))) && fetchProjects.has(details.requestId)) {
-        let project = fetchProjects.get(details.requestId)
-        endVote({errorVoteNetwork: [details.error, details.url]}, null, project)
-    } else */
     if (openedProjects.has(details.tabId)) {
         if (details.type === 'main_frame' || isCaptchaDomain(details.url)) {
             const opened = openedProjects.get(details.tabId)
@@ -408,40 +403,14 @@ const webNavigationOnErrorOccurredListener = async function (details) {
  * @param {boolean} enable - true для регистрации, false для разрегистрации слушателей
  */
 function updateListeners(enable) {
-    if (settings?.debug) console.log('Регистрация слушателей, включение', enable, 'openedProjects.size', openedProjects.size, 'openedProjects', openedProjects)
-    if (enable) {
-        if (!chrome.webNavigation.onErrorOccurred.hasListeners()) {
-            if (settings?.debug) console.log('Регистрация слушателя webNavigation.onErrorOccurred')
-            chrome.webNavigation.onErrorOccurred.addListener(webNavigationOnErrorOccurredListener)
-        }
-        if (!chrome.webNavigation.onCommitted.hasListeners()) {
-            if (settings?.debug) console.log('Регистрация слушателя webNavigation.onCommitted')
-            chrome.webNavigation.onCommitted.addListener(webNavigationOnCommittedListener)
-        }
-        if (!chrome.webNavigation.onCompleted.hasListeners()) {
-            if (settings?.debug) console.log('Регистрация слушателя webNavigation.onCompleted')
-            chrome.webNavigation.onCompleted.addListener(webNavigationOnCompletedListener)
-        }
-        if (!chrome.tabs.onRemoved.hasListeners()) {
-            if (settings?.debug) console.log('Регистрация слушателя tabs.onRemoved')
-            chrome.tabs.onRemoved.addListener(tabsOnRemovedListener)
-        }
-        if (!chrome.webRequest.onCompleted.hasListeners()) {
-            if (settings?.debug) console.log('Регистрация слушателя webRequest.onCompleted')
-            chrome.webRequest.onCompleted.addListener(webRequestOnCompletedListener, {urls: ['<all_urls>']})
-        }
-        if (!chrome.webRequest.onErrorOccurred.hasListeners()) {
-            if (settings?.debug) console.log('Регистрация слушателя webRequest.onErrorOccurred')
-            chrome.webRequest.onErrorOccurred.addListener(webRequestOnErrorOccurredListener, {urls: ['<all_urls>']})
-        }
-    } else {
-        chrome.webNavigation.onErrorOccurred.removeListener(webNavigationOnErrorOccurredListener)
-        chrome.webNavigation.onCommitted.removeListener(webNavigationOnCommittedListener)
-        chrome.webNavigation.onCompleted.removeListener(webNavigationOnCompletedListener)
-        chrome.tabs.onRemoved.removeListener(tabsOnRemovedListener)
-        chrome.webRequest.onCompleted.removeListener(webRequestOnCompletedListener)
-        chrome.webRequest.onErrorOccurred.removeListener(webRequestOnErrorOccurredListener)
-    }
+    updateAllVoteListeners(enable, {
+        webNavigationOnErrorOccurred: webNavigationOnErrorOccurredListener,
+        webNavigationOnCommitted: webNavigationOnCommittedListener,
+        webNavigationOnCompleted: webNavigationOnCompletedListener,
+        tabsOnRemoved: tabsOnRemovedListener,
+        webRequestOnCompleted: webRequestOnCompletedListener,
+        webRequestOnErrorOccurred: webRequestOnErrorOccurredListener
+    }, openedProjects, settings)
 }
 
 // Так как Service Worker может уснуть прямо во время голосования, мы прям при запуске всё равно регистрируем слушателей
