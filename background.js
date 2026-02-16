@@ -889,85 +889,53 @@ async function endVote(request, sender, project) {
         delete project.warn
 
         if (request.successfully) {
+            // Обновляем статистику успеха
+            updateSuccessStats(project, generalStats, todayStats)
+
+            // Форматируем и отправляем сообщение
+            sendMessage = formatSuccessMessage(request, chrome)
             if (typeof request.successfully === 'string') {
                 project.warn = request.successfully
-                sendMessage = chrome.i18n.getMessage('successAutoVoteWarn', request.successfully)
-            } else {
-                sendMessage = chrome.i18n.getMessage('successAutoVote')
             }
-
             sendNotification(getProjectPrefix(project, false), sendMessage, 'info', 'openProject_' + project.key)
-
-            project.stats.successVotes++
-            project.stats.monthSuccessVotes++
-            project.stats.lastSuccessVote = Date.now()
-
-            generalStats.successVotes++
-            generalStats.monthSuccessVotes++
-            generalStats.lastSuccessVote = Date.now()
-            todayStats.successVotes++
-            todayStats.lastSuccessVote = Date.now()
         } else {
+            // Обновляем статистику later
+            updateLaterStats(project, generalStats, todayStats)
+
+            // Форматируем и отправляем сообщение
+            sendMessage = formatLaterMessage(request, chrome)
             if (typeof request.later === 'string') {
                 project.warn = request.later
-                sendMessage = chrome.i18n.getMessage('alreadyVotedWarn', request.later)
-            } else {
-                sendMessage = chrome.i18n.getMessage('alreadyVoted')
             }
-
             sendNotification(getProjectPrefix(project, false), sendMessage, project.warn ? 'warn' : 'info', 'openProject_' + project.key)
-
-            project.stats.laterVotes++
-
-            generalStats.laterVotes++
-            todayStats.laterVotes++
         }
         console.log(getProjectPrefix(project, true), sendMessage + ', ' + chrome.i18n.getMessage('timeStamp') + ' ' + project.time)
         //Если ошибка
     } else {
-        let message
-        if (!request.message) {
-            const name = Object.keys(request)[0]
-            if (Object.values(request)[0] === true) {
-                message = chrome.i18n.getMessage(name)
-            } else {
-                message = chrome.i18n.getMessage(name, Object.values(request)[0])
-            }
-            if (request.usedTranslator && name !== 'usedTranslator') {
-                message += ' ' + chrome.i18n.getMessage('usedTranslator')
-            }
-        } else {
-            message = chrome.i18n.getMessage('siteError', request.message)
-        }
-        if (message.length === 0) message = chrome.i18n.getMessage('emptyError')
-        if (request.incorrectDomain) {
-            message += ' Incorrect domain ' + request.incorrectDomain
-        }
-        let retryCoolDown
-        if (request.retryCoolDown) {
-            retryCoolDown = request.retryCoolDown
-        } else if ((request.errorVote && request.errorVote[0] === '404') || (request.message && project.rating === 'wargm.ru' && project.randomize)) {
-            retryCoolDown = TIME.ERROR_404_COOLDOWN
-        } else if (request.closedTab) {
-            retryCoolDown = 60000
-        } else {
-            retryCoolDown = settings.timeoutError
-        }
+        // Форматируем сообщение об ошибке
+        const message = formatErrorMessage(request, chrome)
 
-        sendMessage = message + '. ' + chrome.i18n.getMessage('errorNextVote', (Math.round(retryCoolDown / 1000 / 60 * 100) / 100).toString())
+        // Вычисляем cooldown для retry
+        const retryCoolDown = calculateErrorCooldown(request, project, settings)
 
-        if (project.randomize) {
-            retryCoolDown = retryCoolDown + Math.floor(Math.random() * TIME.MAX_ERROR_RANDOMIZATION)
-        }
-        project.time = Date.now() + retryCoolDown
+        // Применяем рандомизацию к cooldown
+        const finalCooldown = applyRandomization(retryCoolDown, project)
+
+        // Устанавливаем время следующей попытки
+        project.time = Date.now() + finalCooldown
         project.error = message
+
+        // Форматируем финальное сообщение
+        sendMessage = message + '. ' + chrome.i18n.getMessage('errorNextVote', (Math.round(finalCooldown / 1000 / 60 * 100) / 100).toString())
+
+        // Логируем и отправляем уведомление
         console.error(getProjectPrefix(project, true), sendMessage + ', ' + chrome.i18n.getMessage('timeStamp') + ' ' + project.time)
-        if (!(request.errorVote && request.errorVote[0].charAt(0) === '5')) sendNotification(getProjectPrefix(project, false), sendMessage, 'error', 'openProject_' + project.key)
+        if (shouldNotifyError(request)) {
+            sendNotification(getProjectPrefix(project, false), sendMessage, 'error', 'openProject_' + project.key)
+        }
 
-        project.stats.errorVotes++
-
-        generalStats.errorVotes++
-        todayStats.errorVotes++
+        // Обновляем статистику ошибок
+        updateErrorStats(project, generalStats, todayStats)
     }
 
     await db.put('other', generalStats, 'generalStats')
