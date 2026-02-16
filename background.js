@@ -189,19 +189,8 @@ async function newWindow(project, opened) {
     await db.put('other', todayStats, 'todayStats')
     await updateValue('projects', project)
 
-    if (!settings.disabledRestartOnTimeout) {
-        let create = true
-        let alarms = await chrome.alarms.getAll()
-        for (const alarm of alarms) {
-            if (alarm.scheduledTime === opened.nextAttempt) {
-                create = false
-                break
-            }
-        }
-        if (create) {
-            await createSafeAlarm('nextAttempt_' + project.key, opened.nextAttempt, project)
-        }
-    }
+    // Создание nextAttempt alarm
+    await createNextAttemptAlarmIfNeeded(project, opened, settings)
 
     // Определяем режим голосования (silent или tab)
     if (shouldUseSilentVote(project, allProjects)) {
@@ -227,19 +216,12 @@ async function newWindow(project, opened) {
         openedProjects.delete('start_' + project.key)
         db.put('other', openedProjects, 'openedProjects')
 
-        if (notSupportedGroupTabs) return
-        try {
-            await promiseGroup
-            promiseGroup = groupTabIntoAutoVoteGroup(tab, groupId)
-            const newGroupId = await promiseGroup
-            if (newGroupId !== null) groupId = newGroupId
-        } catch (error) {
-            if (error.message === 'Tabs cannot be edited right now (user may be dragging a tab).') {
-                console.warn(getProjectPrefix(project, true), 'Error when grouping tabs,', error.message)
-            } else {
-                notSupportedGroupTabs = true
-                console.warn(chrome.i18n.getMessage('notSupportedGroupTabs'), error.message)
-            }
+        // Группировка вкладки
+        if (!notSupportedGroupTabs) {
+            const result = await handleTabGrouping(tab, groupId, promiseGroup, project, chrome.i18n.getMessage)
+            groupId = result.groupId
+            promiseGroup = result.promiseGroup
+            notSupportedGroupTabs = result.notSupported
         }
     }
 }

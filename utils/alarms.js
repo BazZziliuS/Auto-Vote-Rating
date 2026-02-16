@@ -44,6 +44,23 @@ async function hasAlarmWithTime(scheduledTime) {
 }
 
 /**
+ * Создает nextAttempt alarm если он еще не существует
+ * @async
+ * @param {Object} project - Объект проекта
+ * @param {Object} opened - Opened проект с полем nextAttempt
+ * @param {Object} settings - Настройки расширения
+ * @returns {Promise<void>}
+ */
+async function createNextAttemptAlarmIfNeeded(project, opened, settings) {
+    if (settings.disabledRestartOnTimeout) return
+
+    const alarmExists = await hasAlarmWithTime(opened.nextAttempt)
+    if (!alarmExists) {
+        await createSafeAlarm('nextAttempt_' + project.key, opened.nextAttempt, project)
+    }
+}
+
+/**
  * Планирует alarm для проекта после завершения голосования
  * Очищает старый nextAttempt alarm и создает новый alarm на project.time
  * @async

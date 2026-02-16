@@ -127,3 +127,34 @@ async function groupTabIntoAutoVoteGroup(tab, groupId) {
     }
     return null
 }
+
+/**
+ * Обрабатывает группировку вкладки с обработкой ошибок
+ * @async
+ * @param {chrome.tabs.Tab} tab - Вкладка для группировки
+ * @param {number} currentGroupId - Текущий ID группы
+ * @param {Object} promiseGroup - Промис предыдущей операции группировки
+ * @param {Object} project - Объект проекта (для логирования)
+ * @param {Function} getMessage - Функция chrome.i18n.getMessage для локализации
+ * @returns {Promise<{groupId: number|null, notSupported: boolean}>} Новый groupId и флаг поддержки
+ */
+async function handleTabGrouping(tab, currentGroupId, promiseGroup, project, getMessage) {
+    try {
+        await promiseGroup
+        const newPromiseGroup = groupTabIntoAutoVoteGroup(tab, currentGroupId)
+        const newGroupId = await newPromiseGroup
+        return {
+            groupId: newGroupId !== null ? newGroupId : currentGroupId,
+            notSupported: false,
+            promiseGroup: newPromiseGroup
+        }
+    } catch (error) {
+        if (error.message === 'Tabs cannot be edited right now (user may be dragging a tab).') {
+            console.warn(getProjectPrefix(project, true), 'Error when grouping tabs,', error.message)
+            return {groupId: currentGroupId, notSupported: false, promiseGroup}
+        } else {
+            console.warn(getMessage('notSupportedGroupTabs'), error.message)
+            return {groupId: currentGroupId, notSupported: true, promiseGroup}
+        }
+    }
+}
