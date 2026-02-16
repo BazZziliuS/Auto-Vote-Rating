@@ -100,7 +100,7 @@ async function triggerTimer(name, sender, fakeId, fakeIdToId) {
  * @async
  * @param {Object} request - Запрос с projectDeleted
  * @param {Map} openedProjects - Map открытых проектов
- * @param {IDBPDatabase} db - База данных
+ * @param {Object} db - База данных
  * @returns {Promise<string>} 'success' или 'reject'
  */
 async function handleProjectDeleted(request, openedProjects, db) {
@@ -139,7 +139,7 @@ async function handleProjectDeleted(request, openedProjects, db) {
  * @param {Object} sender - Отправитель сообщения
  * @param {Object} opened - Открытый проект
  * @param {Object} settings - Настройки расширения
- * @param {IDBPDatabase} db - База данных
+ * @param {Object} db - База данных
  * @returns {Promise<void>}
  */
 async function handleManualActionRequired(request, sender, opened, settings, db) {
@@ -190,7 +190,7 @@ function requiresManualAction(request) {
  * @async
  * @param {Object} request - Запрос с projectRestart
  * @param {Map} openedProjects - Map открытых проектов
- * @param {IDBPDatabase} db - База данных
+ * @param {Object} db - База данных
  * @param {Object} settings - Настройки
  * @returns {Promise<string>} 'success', 'confirmNow' или 'confirmQueue'
  */
@@ -202,7 +202,7 @@ async function handleProjectRestart(request, openedProjects, db, settings) {
         if (request.projectRestart.key === value.key) {
             if (request.confirmed) {
                 openedProjects.delete(key)
-                transaction.objectStore('other').put(openedProjects, 'openedProjects')
+                await transaction.objectStore('other').put(openedProjects, 'openedProjects')
                 tryCloseTab(key, request.projectRestart, 0)
                 console.log(getProjectPrefix(request.projectRestart, true), chrome.i18n.getMessage('canceledVote'))
             } else {
@@ -230,7 +230,9 @@ async function handleProjectRestart(request, openedProjects, db, settings) {
     request.projectRestart.time = null
     await updateValue('projects', request.projectRestart)
     console.log(getProjectPrefix(request.projectRestart, true), chrome.i18n.getMessage('projectRestarted'))
-    checkOpen(request.projectRestart)
+
+    // Запускаем голосование для перезапущенного проекта
+    await checkOpen(request.projectRestart, transaction)
     checkVote()
 
     return 'success'
