@@ -156,20 +156,11 @@ let promises = []
  * @returns {Promise<void>}
  */
 async function checkOpen(project, transaction) {
-    //Если нет интернета, то не голосуем
-    if (settings.disabledCheckInternet) {
-        // Проверка интернета отключена, пропускаем
-    } else if (!navigator.onLine && onLine) {
-        // TODO к сожалению в Service Worker отсутствует слушатель на восстановление соединения с интернетом, у нас остаётся только 1 вариант, это попытаться снова запустить checkVote через минуту
-        await createSafeAlarm('checkVote', Date.now() + TIME.MIN_ALARM_DELAY, null)
-
-        sendNotification(getProjectPrefix(project, false), chrome.i18n.getMessage('internetDisconnected'), 'error', 'openProject_' + project.key)
-        console.warn(getProjectPrefix(project, true), chrome.i18n.getMessage('internetDisconnected'))
-        onLine = false
-        db.put('other', onLine, 'onLine')
-        return
-    } else if (!onLine) {
-        return
+    // Проверка интернет-соединения
+    const connectionCheck = await checkInternetConnection(project, settings, db, onLine)
+    if (connectionCheck.shouldReturn) return
+    if (connectionCheck.newOnLineStatus !== null) {
+        onLine = connectionCheck.newOnLineStatus
     }
 
     // Очистка истекших записей из очереди
