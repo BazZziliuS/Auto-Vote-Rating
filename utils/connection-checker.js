@@ -38,3 +38,32 @@ async function checkInternetConnection(project, settings, db, onLine) {
 
     return {shouldReturn: false, newOnLineStatus: null}
 }
+
+/**
+ * Проверяет восстановление интернет-соединения в checkVote
+ * @async
+ * @param {Object} settings - Настройки расширения
+ * @param {IDBPDatabase} db - База данных
+ * @param {boolean} onLine - Текущий статус соединения
+ * @returns {Promise<{shouldReturn: boolean, newOnLineStatus: boolean|null}>}
+ *          shouldReturn: true если нужно прервать выполнение
+ *          newOnLineStatus: новый статус или null если не изменился
+ */
+async function checkInternetRestoration(settings, db, onLine) {
+    // Если проверка интернета отключена или соединение есть
+    if (settings.disabledCheckInternet || onLine) {
+        return {shouldReturn: false, newOnLineStatus: null}
+    }
+
+    // Проверяем, восстановилось ли соединение
+    if (navigator.onLine) {
+        console.log(chrome.i18n.getMessage('internetRestored'))
+        db.put('other', true, 'onLine')
+        return {shouldReturn: false, newOnLineStatus: true}
+    }
+
+    // Соединения по-прежнему нет, планируем повторную проверку
+    // TODO к сожалению в Service Worker отсутствует слушатель на восстановление соединения с интернетом, у нас остаётся только 1 вариант, это попытаться снова запустить checkVote через минуту
+    await createSafeAlarm('checkVote', Date.now() + TIME.MIN_ALARM_DELAY, null)
+    return {shouldReturn: true, newOnLineStatus: null}
+}

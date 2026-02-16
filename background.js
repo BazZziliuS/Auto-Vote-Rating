@@ -65,17 +65,11 @@ async function checkVote() {
         return
     }
 
-    //Если после попытки голосования не было интернета, проверяется есть ли сейчас интернет и если его нет то не допускает последующую проверку но есои наоборот появился интернет, устаналвивает статус online на true и пропускает код дальше
-    if (!settings.disabledCheckInternet && !onLine) {
-        if (navigator.onLine) {
-            console.log(chrome.i18n.getMessage('internetRestored'))
-            onLine = true
-            db.put('other', onLine, 'onLine')
-        } else {
-            // TODO к сожалению в Service Worker отсутствует слушатель на восстановление соединения с интернетом, у нас остаётся только 1 вариант, это попытаться снова запустить checkVote через минуту
-            await createSafeAlarm('checkVote', Date.now() + TIME.MIN_ALARM_DELAY, null)
-            return
-        }
+    // Проверка восстановления интернет-соединения
+    const restorationCheck = await checkInternetRestoration(settings, db, onLine)
+    if (restorationCheck.shouldReturn) return
+    if (restorationCheck.newOnLineStatus !== null) {
+        onLine = restorationCheck.newOnLineStatus
     }
 
     if (check) {
