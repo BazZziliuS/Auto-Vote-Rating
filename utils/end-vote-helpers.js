@@ -78,3 +78,37 @@ function findAndPrepareOpenedProject(openedProjects, project, timeout, db) {
 
     return opened
 }
+
+/**
+ * Применяет рандомизацию к времени следующего голосования
+ * @param {Object} project - Объект проекта
+ * @param {number} time - Базовое время (timestamp)
+ * @returns {number} Время с примененной рандомизацией
+ */
+function applyTimeRandomization(project, time) {
+    // Пользовательская рандомизация
+    if (project.randomize) {
+        if (project.randomize.min == null) {
+            project.randomize = {}
+            project.randomize.min = 0
+            project.randomize.max = 43200000 // 12 часов
+        }
+        return time + Math.floor(Math.random() * (project.randomize.max - project.randomize.min) + project.randomize.min)
+    }
+
+    // Рандомизация по умолчанию для TopCraft/McTOP (5-10 минут)
+    // Эти рейтинги легко ддосятся от массового автоматического голосования
+    const needsDefaultRandomization =
+        (project.rating === 'topcraft.ru' ||
+         project.rating === 'topcraft.club' ||
+         project.rating === 'mctop.su' ||
+         (project.rating === 'minecraftrating.ru' && project.listing === 'projects')) &&
+        !project.priority &&
+        project.timeoutHour == null
+
+    if (needsDefaultRandomization) {
+        return time + Math.floor(Math.random() * (TIME.MAX_RANDOMIZATION_DEFAULT - TIME.MIN_RANDOMIZATION_DEFAULT) + TIME.MIN_RANDOMIZATION_DEFAULT)
+    }
+
+    return time
+}

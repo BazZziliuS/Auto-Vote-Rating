@@ -881,19 +881,9 @@ async function endVote(request, sender, project) {
         }
 
         time = time.getTime()
-        project.time = time
 
-        if (project.randomize) {
-            if (project.randomize.min == null) {
-                project.randomize = {}
-                project.randomize.min = 0
-                project.randomize.max = 43200000
-            }
-            project.time = project.time + Math.floor(Math.random() * (project.randomize.max - project.randomize.min) + project.randomize.min)
-        } else if ((project.rating === 'topcraft.ru' || project.rating === 'topcraft.club' || project.rating === 'mctop.su' || (project.rating === 'minecraftrating.ru' && project.listing === 'projects')) && !project.priority && project.timeoutHour == null) {
-            //Рандомизация по умолчанию (в пределах 5-10 минут) для бедного TopCraft/McTOP который легко ддосится от массового автоматического голосования
-            project.time = project.time + Math.floor(Math.random() * (TIME.MAX_RANDOMIZATION_DEFAULT - TIME.MIN_RANDOMIZATION_DEFAULT) + TIME.MIN_RANDOMIZATION_DEFAULT)
-        }
+        // Применяем рандомизацию
+        project.time = applyTimeRandomization(project, time)
 
         delete project.error
         delete project.warn

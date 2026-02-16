@@ -221,6 +221,7 @@ Helper функции для функции endVote.
 - `checkIncorrectDomain(request, sender, project)` - Проверяет и добавляет информацию о неправильном домене
 - `closeTabIfNeeded(request, sender, project, settings)` - Закрывает вкладку в зависимости от результата
 - `findAndPrepareOpenedProject(openedProjects, project, timeout, db)` - Находит и подготавливает opened проект
+- `applyTimeRandomization(project, time)` - Применяет рандомизацию к времени голосования
 
 **Используется в:** background.js (endVote)
 
