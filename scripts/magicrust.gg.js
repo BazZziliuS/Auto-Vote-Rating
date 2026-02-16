@@ -310,14 +310,14 @@ function parseCooldownTime(text) {
         const minutes = parseInt(timeMatch[2])
         const seconds = parseInt(timeMatch[3])
         const milliseconds = (hours * 60 * 60 * 1000) + (minutes * 60 * 1000) + (seconds * 1000)
-        return Date.now() + milliseconds + (1 * 60 * 1000) // +1 minute buffer
+        return Date.now() + milliseconds + (60 * 1000) // +1 minute buffer
     }
 
     // Try to find hours in text (e.g., "22 часа", "22 hours")
     const hoursMatch = text.match(/(\d+)\s*(час|hour)/i)
     if (hoursMatch) {
         const hours = parseInt(hoursMatch[1])
-        return Date.now() + (hours * 60 * 60 * 1000) + (1 * 60 * 1000)
+        return Date.now() + (hours * 60 * 60 * 1000) + (60 * 1000)
     }
 
     return null
