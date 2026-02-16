@@ -3,6 +3,67 @@
  */
 
 /**
+ * Проверяет использует ли проект собственный timeout
+ * @param {Object} project - Объект проекта
+ * @param {Object} request - Запрос с результатом голосования
+ * @param {Date} time - Текущее время
+ * @returns {boolean} true если проект использует собственный timeout
+ */
+function usesCustomTimeout(project, request, time) {
+    if (project.rating === 'Custom') {
+        return true
+    }
+
+    if (project.timeout == null && project.timeoutHour == null) {
+        return false
+    }
+
+    if (Number.isInteger(request.later)) {
+        return false
+    }
+
+    // Проверка lastDayMonth
+    if (project.lastDayMonth) {
+        const tomorrow = new Date(time.getFullYear(), time.getMonth(), time.getDay() + 1)
+        if (tomorrow.getMonth() !== time.getMonth()) {
+            return false
+        }
+    }
+
+    return true
+}
+
+/**
+ * Обрабатывает проекты с ограниченным количеством голосов
+ * @param {Object} project - Объект проекта
+ * @param {Object} allProjects - Объект со всеми конфигурациями проектов
+ * @param {Date} time - Текущее время
+ * @returns {{needSetTime: boolean, time: Date}} Результат обработки
+ */
+function handleLimitedCountVote(project, allProjects, time) {
+    if (!allProjects[project.rating]?.limitedCountVote?.()) {
+        return {needSetTime: true, time}
+    }
+
+    project.countVote = project.countVote + 1
+    if (project.countVote >= project.maxCountVote) {
+        project.countVote = 0
+        const nextDay = new Date(
+            time.getFullYear(),
+            time.getMonth(),
+            time.getDate() + 1,
+            0,
+            project.priority ? 0 : 10,
+            0,
+            0
+        )
+        return {needSetTime: false, time: nextDay}
+    }
+
+    return {needSetTime: true, time}
+}
+
+/**
  * Вычисляет время следующего голосования на основе конфигурации проекта
  * @param {Object} project - Объект проекта
  * @param {Object} request - Запрос с результатом голосования
@@ -13,7 +74,7 @@ function calculateNextVoteTime(project, request, allProjects) {
     let time = new Date()
 
     // Custom проекты или проекты с собственным timeout
-    if (project.rating === 'Custom' || ((project.timeout != null || project.timeoutHour != null) && !Number.isInteger(request.later) && !(project.lastDayMonth && new Date(time.getFullYear(), time.getMonth(), time.getDay() + 1).getMonth() === new Date().getMonth()))) {
+    if (usesCustomTimeout(project, request, time)) {
         return calculateCustomTimeout(project, time)
     }
 
@@ -80,17 +141,14 @@ function calculateCustomTimeout(project, time) {
  * @private
  */
 function calculateLaterTimeout(project, request, time, allProjects) {
-    let needSetTime = true
-    if (allProjects[project.rating]?.limitedCountVote?.()) {
-        project.countVote = project.countVote + 1
-        if (project.countVote >= project.maxCountVote) {
-            needSetTime = false
-            time = new Date(time.getFullYear(), time.getMonth(), time.getDate() + 1, 0, (project.priority ? 0 : 10), 0, 0)
-        }
-    }
-    if (needSetTime) {
+    const result = handleLimitedCountVote(project, allProjects, time)
+
+    if (result.needSetTime) {
         time = new Date(request.later)
+    } else {
+        time = result.time
     }
+
     return time.getTime()
 }
 
@@ -184,28 +242,27 @@ function calculateDailyTimeout(project, time, timeoutRating) {
  * @private
  */
 function calculateHourlyTimeout(project, request, time, timeoutRating, allProjects) {
-    let needSetTime = true
-    if (allProjects[project.rating]?.limitedCountVote?.()) {
-        project.countVote = project.countVote + 1
-        if (project.countVote >= project.maxCountVote) {
-            needSetTime = false
-            time = new Date(time.getFullYear(), time.getMonth(), time.getDate() + 1, 0, (project.priority ? 0 : 10), 0, 0)
-            project.countVote = 0
-        }
-    }
-    if (needSetTime) {
+    const result = handleLimitedCountVote(project, allProjects, time)
+
+    if (result.needSetTime) {
         // Если later=true, используем время последнего успешного голосования вместо текущего
         if (request.later === true && project.stats.lastSuccessVote) {
             time = new Date(project.stats.lastSuccessVote)
         }
+
         let hours = time.getHours() + timeoutRating.hours
         let minutes = time.getMinutes()
         let seconds = time.getSeconds()
         let milliseconds = time.getMilliseconds()
+
         if (timeoutRating.minutes != null) minutes += timeoutRating.minutes
         if (timeoutRating.seconds != null) seconds += timeoutRating.seconds
         if (timeoutRating.milliseconds != null) milliseconds += timeoutRating.milliseconds
+
         time = new Date(time.getFullYear(), time.getMonth(), time.getDate(), hours, minutes, seconds, milliseconds)
+    } else {
+        time = result.time
     }
+
     return time.getTime()
 }
