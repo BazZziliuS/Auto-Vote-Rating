@@ -631,28 +631,10 @@ async function onRuntimeMessage(request, sender, sendResponse) {
     }
 
     let opened = openedProjects.get(sender.tab.id)
-    if (request.captcha || request.authSteam || request.discordLogIn || request.auth || request.requiredConfirmTOS || (request.errorCaptcha && !request.restartVote) || request.restartVote === false || request.captchaPassed === 'double') {//Если требует ручное прохождение капчи
-        const project = await db.get('projects', opened.key)
-        let message
-        if (request.captcha) {
-            message = chrome.i18n.getMessage('requiresCaptcha')
-        } else if (request.captchaPassed === 'double') {
-            message = chrome.i18n.getMessage('captchaPassedDouble')
-        } else if (request.message) {
-            message = request.message
-        } else {
-            if (Object.values(request)[0] !== true) {
-                message = chrome.i18n.getMessage(Object.keys(request)[0], Object.values(request)[0])
-            } else {
-                message = chrome.i18n.getMessage(Object.keys(request)[0])
-            }
-        }
-        if (!(request.captcha && settings.disabledWarnCaptcha)) {
-            console.warn(getProjectPrefix(project, true), message)
-            sendNotification(getProjectPrefix(project, false), message, 'warn', 'openTab_' + sender.tab.id)
-            project.error = message
-        }
-        updateValue('projects', project)
+
+    // Обработка ручных действий (капча, авторизация и т.д.)
+    if (requiresManualAction(request)) {
+        await handleManualActionRequired(request, sender, opened, settings, db)
     } else {
         endVote(request, sender, opened)
     }

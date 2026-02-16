@@ -133,6 +133,59 @@ async function handleProjectDeleted(request, openedProjects, db) {
 }
 
 /**
+ * Обрабатывает ситуации требующие ручного действия (капча, авторизация и т.д.)
+ * @async
+ * @param {Object} request - Объект запроса
+ * @param {Object} sender - Отправитель сообщения
+ * @param {Object} opened - Открытый проект
+ * @param {Object} settings - Настройки расширения
+ * @param {IDBPDatabase} db - База данных
+ * @returns {Promise<void>}
+ */
+async function handleManualActionRequired(request, sender, opened, settings, db) {
+    const project = await db.get('projects', opened.key)
+    let message
+
+    if (request.captcha) {
+        message = chrome.i18n.getMessage('requiresCaptcha')
+    } else if (request.captchaPassed === 'double') {
+        message = chrome.i18n.getMessage('captchaPassedDouble')
+    } else if (request.message) {
+        message = request.message
+    } else {
+        if (Object.values(request)[0] !== true) {
+            message = chrome.i18n.getMessage(Object.keys(request)[0], Object.values(request)[0])
+        } else {
+            message = chrome.i18n.getMessage(Object.keys(request)[0])
+        }
+    }
+
+    if (!(request.captcha && settings.disabledWarnCaptcha)) {
+        console.warn(getProjectPrefix(project, true), message)
+        sendNotification(getProjectPrefix(project, false), message, 'warn', 'openTab_' + sender.tab.id)
+        project.error = message
+    }
+
+    updateValue('projects', project)
+}
+
+/**
+ * Проверяет требуется ли ручное действие для запроса
+ * @param {Object} request - Объект запроса
+ * @returns {boolean} true если требуется ручное действие
+ */
+function requiresManualAction(request) {
+    return request.captcha ||
+           request.authSteam ||
+           request.discordLogIn ||
+           request.auth ||
+           request.requiredConfirmTOS ||
+           (request.errorCaptcha && !request.restartVote) ||
+           request.restartVote === false ||
+           request.captchaPassed === 'double'
+}
+
+/**
  * Обрабатывает перезапуск проекта
  * @async
  * @param {Object} request - Запрос с projectRestart
