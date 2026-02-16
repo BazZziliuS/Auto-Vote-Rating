@@ -428,17 +428,10 @@ async function onRuntimeMessage(request, sender, sendResponse) {
         checkVote()
         return
     } else if (request === 'reloadAllSettings') {
-        const store = db.transaction('other', 'readwrite').store
-        settings = await store.get('settings')
-        generalStats = await store.get('generalStats')
-        todayStats = await store.get('todayStats')
-        for (const [key, value] of openedProjects) {
-            openedProjects.delete(key)
-            tryCloseTab(key, value, 0)
-        }
-        await store.put(openedProjects, 'openedProjects')
-        reloadAllAlarms()
-        checkVote()
+        const result = await handleReloadAllSettings(db, openedProjects, tryCloseTab, reloadAllAlarms, checkVote)
+        settings = result.settings
+        generalStats = result.generalStats
+        todayStats = result.todayStats
         return
     } else if (request === 'reloadSettings') {
         settings = await db.get('other', 'settings')

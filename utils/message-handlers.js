@@ -237,3 +237,33 @@ async function handleProjectRestart(request, openedProjects, db, settings) {
 
     return 'success'
 }
+
+/**
+ * Обрабатывает сообщение о полной перезагрузке настроек
+ * Перезагружает все настройки, закрывает открытые вкладки голосования и перезапускает все алармы
+ * @async
+ * @param {Object} db - База данных
+ * @param {Map} openedProjects - Map открытых проектов
+ * @param {Function} tryCloseTab - Функция закрытия вкладки
+ * @param {Function} reloadAllAlarms - Функция перезагрузки всех алармов
+ * @param {Function} checkVote - Функция проверки голосования
+ * @returns {Promise<{settings: Object, generalStats: Object, todayStats: Object}>} Обновленные настройки и статистика
+ */
+async function handleReloadAllSettings(db, openedProjects, tryCloseTab, reloadAllAlarms, checkVote) {
+    const store = db.transaction('other', 'readwrite').store
+    const settings = await store.get('settings')
+    const generalStats = await store.get('generalStats')
+    const todayStats = await store.get('todayStats')
+
+    // Закрываем все открытые вкладки голосования
+    for (const [key, value] of openedProjects) {
+        openedProjects.delete(key)
+        tryCloseTab(key, value, 0)
+    }
+
+    await store.put(openedProjects, 'openedProjects')
+    reloadAllAlarms()
+    checkVote()
+
+    return {settings, generalStats, todayStats}
+}
