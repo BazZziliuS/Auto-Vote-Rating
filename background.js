@@ -60,8 +60,8 @@ async function checkVote() {
 
     await initializeFunc
 
-    // noinspection JSUnresolvedReference
-    if (!settings.operaAttention2 && (navigator?.userAgentData?.brands?.[0]?.brand === 'Opera' || (!!self.opr && !!opr.addons) || !!self.opera || navigator.userAgent.indexOf(' OPR/') >= 0)) {
+    // Проверка браузера Opera
+    if (shouldSkipForOpera(settings)) {
         return
     }
 
@@ -852,8 +852,8 @@ async function updateValue(objStore, value) {
 
 chrome.runtime.onInstalled.addListener(async function (details) {
     await initializeFunc
-    // noinspection JSUnresolvedReference
-    if (!settings.operaAttention2 && (navigator?.userAgentData?.brands?.[0]?.brand === 'Opera' || (!!self.opr && !!opr.addons) || !!self.opera || navigator.userAgent.indexOf(' OPR/') >= 0)) {
+    // Проверка браузера Opera
+    if (shouldSkipForOpera(settings)) {
         chrome.runtime.openOptionsPage()
         return
     }
