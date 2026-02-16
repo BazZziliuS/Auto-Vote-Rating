@@ -2,7 +2,7 @@
 
 Директория содержит переиспользуемые модули для расширения Auto Vote Rating.
 
-## 📁 Структура модулей (16 модулей)
+## 📁 Структура модулей (17 модулей)
 
 ```
 utils/
@@ -23,6 +23,7 @@ utils/
 ├── message-handlers.js           # 📨 Обработка сообщений
 ├── notifications.js              # 🔔 Уведомления
 ├── cookies-manager.js            # 🍪 Управление cookies
+├── error-handler.js              # ⚠️ Обработка ошибок
 └── console-interceptor.js        # 📝 Логирование
 ```
 
@@ -208,6 +209,25 @@ utils/
 
 ---
 
+### ⚠️ Обработка ошибок
+
+#### `error-handler.js`
+Обработка ошибок при работе со вкладками и инъекцией скриптов.
+
+**Функции:**
+- `catchTabError(error, project, db)` - Обрабатывает ошибки вкладок и скриптов
+
+**Игнорируемые ошибки:**
+- "The frame was removed."
+- "The tab was closed."
+- "PrecompiledScript.executeInGlobal" (FireFox)
+- "Could not establish connection. Receiving end does not exist"
+- И другие несущественные ошибки
+
+**Используется в:** background.js (webNavigationOnCommittedListener, webNavigationOnCompletedListener)
+
+---
+
 ### 🔔 Уведомления и логирование
 
 #### `notifications.js`
@@ -315,6 +335,7 @@ importScripts('utils/stats-updater.js')
 importScripts('utils/tab-manager.js')
 importScripts('utils/notifications.js')
 importScripts('utils/cookies-manager.js')        // Управление cookies
+importScripts('utils/error-handler.js')          // Обработка ошибок
 importScripts('utils/console-interceptor.js')    // Последним - перехват console
 ```
 

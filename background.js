@@ -20,6 +20,7 @@ importScripts('utils/tab-manager.js')
 importScripts('utils/message-handlers.js')
 importScripts('utils/notifications.js')
 importScripts('utils/cookies-manager.js')
+importScripts('utils/error-handler.js')
 importScripts('utils/console-interceptor.js')
 
 // TODO отложенный importScripts пока не работают, подробнее https://bugs.chromium.org/p/chromium/issues/detail?id=1198822
@@ -425,7 +426,7 @@ const webNavigationOnCommittedListener = function (details) {
         chrome.scripting.executeScript({target, files: filesIsolated, injectImmediately: true}, () => {
             const error = chrome.runtime.lastError
             if (error) {
-                catchTabError(error, opened)
+                catchTabError(error, opened, db)
             }
         })
     }
@@ -433,7 +434,7 @@ const webNavigationOnCommittedListener = function (details) {
         chrome.scripting.executeScript({target, files: filesMain, world: 'MAIN', injectImmediately: true}, () => {
             const error = chrome.runtime.lastError
             if (error) {
-                catchTabError(error, opened)
+                catchTabError(error, opened, db)
             }
         })
     }
@@ -510,7 +511,7 @@ const webNavigationOnCompletedListener = async function (details) {
                 db.put('other', openedProjects, 'openedProjects')
             }
         } catch (error) {
-            catchTabError(error, project)
+            catchTabError(error, project, db)
         }
     } else if (details.frameId !== 0 && (
         details.url.match(/hcaptcha.com\/captcha\/*/)
@@ -545,24 +546,12 @@ const webNavigationOnCompletedListener = async function (details) {
             if (tab.status != null && tab.status !== 'complete') return
             await chrome.tabs.sendMessage(details.tabId, {sendProject: true, project, settings})
         } catch (error) {
-            catchTabError(error, project)
+            catchTabError(error, project, db)
         }
     }
 }
 
-async function catchTabError(error, project) {
-    if (error.message !== 'The frame was removed.' && !error.message.includes('No frame with id') && error.message !== 'The tab was closed.' && !error.message.includes('PrecompiledScript.executeInGlobal')/*Для FireFox мы игнорируем эту ошибку*/ && !error.message.includes('Could not establish connection. Receiving end does not exist') && !error.message.includes('The message port closed before a response was received') && (!error.message.includes('Frame with ID') && !error.message.includes('was removed'))) {
-        project = await db.get('projects', project.key)
-        let message = error.message
-        if (message.includes('This page cannot be scripted due to an ExtensionsSettings policy')) {
-            message += ' Try this solution: https://github.com/Serega007RU/Auto-Vote-Rating/wiki/Problems-with-Opera'
-        }
-        console.error(getProjectPrefix(project, true), error.message)
-        sendNotification(getProjectPrefix(project, false), error.message, 'error', 'openProject_' + project.key)
-        project.error = message
-        updateValue('projects', project)
-    }
-}
+// Функция catchTabError перенесена в utils/error-handler.js
 
 const tabsOnRemovedListener = async function (tabId) {
     await initializeFunc
