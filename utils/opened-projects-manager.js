@@ -133,7 +133,7 @@ function cleanupExpiredQueue(openedProjects) {
  * @param {Map} openedProjects - Map открытых проектов
  * @param {IDBTransaction} transaction - Транзакция базы данных
  * @param {Object} settings - Настройки расширения
- * @param {IDBPDatabase} db - База данных
+ * @param {Object} db - База данных
  * @returns {Promise<boolean>} true если нужно прервать выполнение
  */
 async function handleProjectConflicts(project, openedProjects, transaction, settings, db) {

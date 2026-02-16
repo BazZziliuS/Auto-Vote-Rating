@@ -49,7 +49,7 @@ function closeTabIfNeeded(request, sender, project, settings) {
  * @param {Map} openedProjects - Map открытых проектов
  * @param {Object} project - Объект проекта для поиска
  * @param {number} timeout - Timeout для создания queued проекта
- * @param {IDBPDatabase} db - База данных
+ * @param {Object} db - База данных
  * @returns {Object|null} Opened проект или null если не найден
  */
 function findAndPrepareOpenedProject(openedProjects, project, timeout, db) {
@@ -119,7 +119,7 @@ function applyTimeRandomization(project, time) {
  * @param {Object} project - Объект проекта
  * @param {Map} openedProjects - Map открытых проектов
  * @param {number} timeout - Время задержки перед cleanup (мс)
- * @param {IDBPDatabase} db - База данных
+ * @param {Object} db - База данных
  * @param {Function} checkVote - Функция проверки голосования
  */
 function scheduleQueueCleanup(project, openedProjects, timeout, db, checkVote) {

@@ -7,7 +7,7 @@
  * @async
  * @param {Error} error - Объект ошибки
  * @param {Object} project - Объект проекта
- * @param {IDBPDatabase} db - База данных
+ * @param {Object} db - База данных
  * @returns {Promise<void>}
  */
 async function catchTabError(error, project, db) {

@@ -114,7 +114,7 @@ function initializeStatsBeforeVote(project, generalStats, todayStats) {
 /**
  * Сохраняет статистику и проект после завершения голосования
  * @async
- * @param {IDBPDatabase} db - База данных
+ * @param {Object} db - База данных
  * @param {Object} generalStats - Общая статистика
  * @param {Object} todayStats - Статистика за сегодня
  * @param {Object} project - Объект проекта

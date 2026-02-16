@@ -7,7 +7,7 @@
  * @async
  * @param {Object} project - Объект проекта
  * @param {Object} settings - Настройки расширения
- * @param {IDBPDatabase} db - База данных
+ * @param {Object} db - База данных
  * @param {boolean} onLine - Текущий статус соединения
  * @returns {Promise<{shouldReturn: boolean, newOnLineStatus: boolean|null}>}
  *          shouldReturn: true если нужно прервать выполнение
@@ -43,7 +43,7 @@ async function checkInternetConnection(project, settings, db, onLine) {
  * Проверяет восстановление интернет-соединения в checkVote
  * @async
  * @param {Object} settings - Настройки расширения
- * @param {IDBPDatabase} db - База данных
+ * @param {Object} db - База данных
  * @param {boolean} onLine - Текущий статус соединения
  * @returns {Promise<{shouldReturn: boolean, newOnLineStatus: boolean|null}>}
  *          shouldReturn: true если нужно прервать выполнение

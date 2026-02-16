@@ -5,7 +5,7 @@
 /**
  * Обновляет значение в хранилище и отправляет уведомление об изменении
  * @async
- * @param {IDBPDatabase} db - База данных
+ * @param {Object} db - База данных
  * @param {string} storeName - Имя хранилища ('projects', 'other')
  * @param {Object} value - Значение для обновления (должно содержать поле key)
  * @returns {Promise<boolean>} true если обновление успешно
@@ -37,7 +37,7 @@ async function updateStoreValue(db, storeName, value) {
 /**
  * Сохраняет несколько значений в хранилище 'other'
  * @async
- * @param {IDBPDatabase} db - База данных
+ * @param {Object} db - База данных
  * @param {Object} values - Объект с парами ключ-значение для сохранения
  * @returns {Promise<void>}
  */
@@ -53,7 +53,7 @@ async function saveMultipleToOther(db, values) {
 /**
  * Загружает несколько значений из хранилища 'other'
  * @async
- * @param {IDBPDatabase} db - База данных
+ * @param {Object} db - База данных
  * @param {string[]} keys - Массив ключей для загрузки
  * @returns {Promise<Object>} Объект с загруженными значениями
  */
@@ -72,7 +72,7 @@ async function loadMultipleFromOther(db, keys) {
 /**
  * Получает все проекты для конкретного рейтинга
  * @async
- * @param {IDBPDatabase} db - База данных
+ * @param {Object} db - База данных
  * @param {string} rating - Название рейтинга
  * @returns {Promise<Array>} Массив проектов
  */
@@ -91,7 +91,7 @@ async function getProjectsByRating(db, rating) {
 /**
  * Обновляет проект в базе данных
  * @async
- * @param {IDBPDatabase} db - База данных
+ * @param {Object} db - База данных
  * @param {Object} project - Объект проекта для обновления
  * @param {IDBObjectStoreCursor} [cursor] - Курсор для обновления (если есть)
  * @returns {Promise<void>}
@@ -107,7 +107,7 @@ async function updateProject(db, project, cursor = null) {
 /**
  * Удаляет все значения из хранилища
  * @async
- * @param {IDBPDatabase} db - База данных
+ * @param {Object} db - База данных
  * @param {string} storeName - Имя хранилища
  * @returns {Promise<void>}
  */
@@ -118,7 +118,7 @@ async function clearStore(db, storeName) {
 /**
  * Проверяет существование записи в хранилище
  * @async
- * @param {IDBPDatabase} db - База данных
+ * @param {Object} db - База данных
  * @param {string} storeName - Имя хранилища
  * @param {*} key - Ключ для проверки
  * @returns {Promise<boolean>} true если запись существует
