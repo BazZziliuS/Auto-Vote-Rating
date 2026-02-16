@@ -112,3 +112,31 @@ function applyTimeRandomization(project, time) {
 
     return time
 }
+
+/**
+ * Планирует cleanup очереди и следующую проверку голосования
+ * Удаляет queued запись проекта и запускает checkVote через timeout
+ * @param {Object} project - Объект проекта
+ * @param {Map} openedProjects - Map открытых проектов
+ * @param {number} timeout - Время задержки перед cleanup (мс)
+ * @param {IDBPDatabase} db - База данных
+ * @param {Function} checkVote - Функция проверки голосования
+ */
+function scheduleQueueCleanup(project, openedProjects, timeout, db, checkVote) {
+    async function removeQueue() {
+        for (const [tab, value] of openedProjects) {
+            if (tab.startsWith?.('queue_') && project.key === value.key) {
+                openedProjects.delete(tab)
+            }
+        }
+        db.put('other', openedProjects, 'openedProjects')
+        checkVote()
+    }
+
+    setTimeout(() => {
+        removeQueue()
+    }, timeout)
+
+    // TODO мы не можем быть уверены что setTimeout в Service Worker 100% отработает, поэтому мы на всякий случай создаём chrome.alarm
+    createSafeAlarm('checkVote', Date.now() + timeout, project)
+}

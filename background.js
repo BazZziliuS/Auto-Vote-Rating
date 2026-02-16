@@ -826,22 +826,8 @@ async function endVote(request, sender, project) {
     // Планируем alarm для следующего голосования
     await scheduleProjectAlarm(project)
 
-    async function removeQueue() {
-        for (const [tab, value] of openedProjects) {
-            if (tab.startsWith?.('queue_') && project.key === value.key) {
-                openedProjects.delete(tab)
-            }
-        }
-        db.put('other', openedProjects, 'openedProjects')
-        checkVote()
-    }
-
-    setTimeout(() => {
-        removeQueue()
-    }, timeout)
-
-    // TODO мы не можем быть уверены что setTimeout в Service Worker 100% отработает, поэтому мы на всякий случай создаём chrome.alarm
-    await createSafeAlarm('checkVote', Date.now() + timeout, project)
+    // Планируем cleanup очереди и следующую проверку голосования
+    scheduleQueueCleanup(project, openedProjects, timeout, db, checkVote)
 }
 
 
