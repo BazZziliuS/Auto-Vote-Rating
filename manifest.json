@@ -40,7 +40,9 @@
     "https://challenges.cloudflare.com/*",
     "https://*.yandexcloud.net/*",
     "https://*.mtcaptcha.com/*",
-    "https://*.t.me/*"
+    "https://*.t.me/*",
+    "https://*.sentry-cdn.com/*",
+    "https://*.sentry.io/*"
   ],
   "optional_host_permissions": [
     "<all_urls>"
@@ -59,6 +61,9 @@
       ]
     }
   ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' https://js-de.sentry-cdn.com https://browser.sentry-cdn.com; object-src 'self'"
+  },
   "update_url": "https://clients2.google.com/service/update2/crx",
   "version": "7.3.0",
   "minimum_chrome_version": "105.0",
