@@ -6,9 +6,8 @@
 // Функция для загрузки и инициализации Sentry в Service Worker
 async function initSentryBackground() {
     try {
-        // Импортируем Sentry SDK для Service Worker
-        // Используем версию bundle для Service Worker
-        importScripts('https://browser.sentry-cdn.com/8.46.0/bundle.min.js')
+        // Импортируем минимальный Sentry client (локальный файл)
+        importScripts('/libs/sentry-minimal.js')
 
         const manifest = chrome.runtime.getManifest()
         const version = manifest.version
@@ -22,11 +21,8 @@ async function initSentryBackground() {
             release: `auto-vote-rating@${version}`,
             environment: environment,
 
-            // Sampling rates
-            tracesSampleRate: 0.1, // 10% транзакций
-
-            // Service Worker specific integrations
-            integrations: [],
+            // Sampling rate
+            sampleRate: 1.0, // 100% ошибок
 
             // Фильтрация ошибок
             beforeSend(event, hint) {
@@ -71,14 +67,7 @@ async function initSentryBackground() {
 
         console.log('[Sentry Background] Error monitoring initialized for version', version)
 
-        // Перехватываем необработанные ошибки
-        self.addEventListener('error', (event) => {
-            Sentry.captureException(event.error)
-        })
-
-        self.addEventListener('unhandledrejection', (event) => {
-            Sentry.captureException(event.reason)
-        })
+        // Глобальные обработчики устанавливаются автоматически через Sentry.init()
 
     } catch (error) {
         console.warn('[Sentry Background] Failed to initialize Sentry:', error)

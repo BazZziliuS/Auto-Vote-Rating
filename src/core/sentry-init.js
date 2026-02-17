@@ -17,24 +17,8 @@ if (typeof Sentry !== 'undefined') {
         release: `auto-vote-rating@${version}`,
         environment: environment,
 
-        // Sampling rates
-        tracesSampleRate: 0.1, // 10% транзакций для performance monitoring
-        replaysSessionSampleRate: 0.1, // 10% сессий для записи
-        replaysOnErrorSampleRate: 1.0, // 100% сессий с ошибками
-
-        // Integration configuration
-        integrations: [
-            // Browser profiling
-            Sentry.browserTracingIntegration({
-                // Отслеживание взаимодействий пользователя
-                tracingOrigins: ['localhost', /^\//],
-            }),
-            // Session replay для отладки
-            Sentry.replayIntegration({
-                maskAllText: false,
-                blockAllMedia: false,
-            }),
-        ],
+        // Sampling rate (минимальная версия поддерживает только базовый sampling)
+        sampleRate: 1.0, // 100% ошибок (можно снизить для production)
 
         // Фильтрация ошибок
         beforeSend(event, hint) {
