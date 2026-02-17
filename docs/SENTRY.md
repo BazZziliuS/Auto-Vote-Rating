@@ -36,12 +36,10 @@
 
 ```javascript
 {
-  dsn: 'https://af65e911a63f25c10b114b5d73f3d372@o4508675969376256.ingest.de.sentry.io/4508675974160464',
+  dsn: 'https://af65e911a63f25c10b114b5d73f3d372@o4510900208730112.ingest.de.sentry.io/4510900210761808',
   release: 'auto-vote-rating@7.3.0',
   environment: 'production',
-  tracesSampleRate: 0.1,        // 10% транзакций
-  replaysSessionSampleRate: 0.1, // 10% сессий
-  replaysOnErrorSampleRate: 1.0  // 100% сессий с ошибками
+  sampleRate: 1.0               // 100% ошибок
 }
 ```
 

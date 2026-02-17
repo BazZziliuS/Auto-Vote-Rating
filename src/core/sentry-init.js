@@ -11,7 +11,7 @@ if (typeof Sentry !== 'undefined') {
 
     // Инициализация Sentry
     Sentry.init({
-        dsn: 'https://af65e911a63f25c10b114b5d73f3d372@o4508675969376256.ingest.de.sentry.io/4508675974160464',
+        dsn: 'https://af65e911a63f25c10b114b5d73f3d372@o4510900208730112.ingest.de.sentry.io/4510900210761808',
 
         // Release tracking
         release: `auto-vote-rating@${version}`,

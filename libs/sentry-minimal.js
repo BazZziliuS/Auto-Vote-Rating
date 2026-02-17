@@ -6,8 +6,8 @@
 (function(global) {
     'use strict';
 
-    const SENTRY_DSN = 'https://af65e911a63f25c10b114b5d73f3d372@o4508675969376256.ingest.de.sentry.io/4508675974160464'
-    const SENTRY_ENDPOINT = 'https://o4508675969376256.ingest.de.sentry.io/api/4508675974160464/store/'
+    const SENTRY_DSN = 'https://af65e911a63f25c10b114b5d73f3d372@o4510900208730112.ingest.de.sentry.io/4510900210761808'
+    const SENTRY_ENDPOINT = 'https://o4510900208730112.ingest.de.sentry.io/api/4510900210761808/store/'
 
     // Парсим DSN
     function parseDSN(dsn) {
