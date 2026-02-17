@@ -14,29 +14,37 @@ Key features:
 
 ## Core Architecture
 
-### File Structure
+### File Structure (After Refactoring)
 
 ```
-├── background.js          # Service worker - manages voting queue, alarms, tab injection
-├── projects.js           # Configuration for all supported sites (allProjects object)
-├── main.js              # Core voting logic and utilities
-├── options.js           # UI for managing projects and settings
-├── options.html         # Extension settings page
 ├── manifest.json        # Chrome extension manifest v3
-├── scripts/
-│   ├── DOMAIN.js        # Site-specific voting scripts (e.g., magicrust.gg.js)
-│   ├── DOMAIN_silentvote.js  # Background voting scripts (no tab needed)
-│   └── main/
-│       ├── api.js           # Messaging between content script and background
-│       ├── captchaclicker.js # Captcha detection and solving
-│       ├── audio_captcha.js  # Audio captcha to text conversion
-│       ├── hacktimer.js      # Timer that works in background tabs
-│       ├── alert_main.js     # Alert handling
-│       ├── istrusted_main.js # Trusted event simulation
-│       └── visible.js        # Visibility detection
-└── libs/
-    ├── idb.umd.js       # IndexedDB wrapper
-    └── linkedom.js      # DOM parser for service worker
+├── libs/
+│   ├── idb.umd.js       # IndexedDB wrapper
+│   └── linkedom.js      # DOM parser for service worker
+├── src/
+│   ├── core/
+│   │   ├── background.js    # Service worker - manages voting queue, alarms
+│   │   ├── projects.js      # Configuration for all supported sites (allProjects)
+│   │   ├── main.js          # Core voting logic and utilities
+│   │   └── options.js       # UI for managing projects and settings
+│   ├── ui/
+│   │   └── options.html     # Extension settings page
+│   ├── utils/
+│   │   ├── database/        # Database utilities (init, migrations)
+│   │   ├── voting/          # Voting logic (time calculator, result handler)
+│   │   └── browser/         # Browser APIs (tabs, notifications, alarms)
+│   └── scripts/
+│       ├── sites/           # Site-specific voting scripts (DOMAIN.js)
+│       ├── silentvote/      # Background voting scripts (DOMAIN_silentvote.js)
+│       └── common/          # Common scripts (api, captcha, alert, istrusted)
+└── css/                 # Stylesheets
+```
+
+**IMPORTANT**: After refactoring, Service Worker (`src/core/background.js`) uses **absolute paths** with `/` prefix in `importScripts()`:
+```javascript
+importScripts('/libs/idb.umd.js')           // ✓ Correct (absolute from extension root)
+importScripts('/src/core/projects.js')     // ✓ Correct
+importScripts('libs/idb.umd.js')           // ✗ Wrong (relative to service worker location)
 ```
 
 ### How Voting Works
@@ -170,9 +178,26 @@ async function vote(first) {
 
 ## Key Patterns
 
-### Cooldown Parsing
+### Cooldown Detection and Time Calculation
 
-Always check for cooldown BEFORE attempting vote:
+**CRITICAL**: Always send **specific cooldown time** instead of `{later: true}` when possible.
+
+**Why**: When `{later: true}` is sent, background calculates time based on `project.stats.lastSuccessVote`. If this is empty (first run, data reset), cooldown is calculated from **current time**, causing immediate re-execution loop.
+
+**Correct approach**:
+```javascript
+function sendCooldown(nextVoteTime) {
+    // Calculate specific time if not provided
+    if (!nextVoteTime) {
+        const cooldownHours = 10  // Site-specific cooldown
+        nextVoteTime = Date.now() + (cooldownHours * 60 * 60 * 1000) + (60 * 1000)
+        console.log('[Site] Calculated cooldown:', cooldownHours, 'hours ->', new Date(nextVoteTime).toLocaleString())
+    }
+    chrome.runtime.sendMessage({later: nextVoteTime})  // Send specific timestamp
+}
+```
+
+**Check cooldown BEFORE attempting vote**:
 ```javascript
 // Check if timer visible before clicking
 const timerElement = document.querySelector('.cooldown-timer')
@@ -184,9 +209,26 @@ if (timerElement && timerElement.offsetParent !== null) {
 ```
 
 Parse various time formats:
-- "21 ч. 59 м. 2 с." (Russian format)
+- "21 ч. 59 м. 2 с." (Russian format) → Use regex: `/(\d+)\s*ч\.?\s*(\d+)\s*м\.?\s*(\d+)\s*с\.?/`
 - "21:59:02" (HH:MM:SS)
 - "22 hours" (text format)
+
+Example parsing function:
+```javascript
+function parseCooldownTime(text) {
+    const cleanText = text.trim().replace(/\s+/g, ' ')
+
+    // Russian format: "3 ч. 37 м. 36 с."
+    const russianMatch = cleanText.match(/(\d+)\s*ч\.?\s*(\d+)\s*м\.?\s*(\d+)\s*с\.?/)
+    if (russianMatch) {
+        const hours = parseInt(russianMatch[1]) || 0
+        const minutes = parseInt(russianMatch[2]) || 0
+        const seconds = parseInt(russianMatch[3]) || 0
+        return Date.now() + (hours * 3600 + minutes * 60 + seconds) * 1000 + 30000
+    }
+    return null
+}
+```
 
 ### Success Detection
 
@@ -198,17 +240,78 @@ Check multiple indicators:
 
 Only send `{successfully}` after confirmed vote, not when cooldown detected.
 
-## Testing After Changes
+## Debugging and Testing
+
+### Adding Debug Logging
+
+When debugging voting scripts, add comprehensive logging with prefixes:
+
+```javascript
+console.log('[Site Name] Starting vote, first:', first)
+console.log('[Site Name] Step 1: Checking for cooldown...')
+console.log('[Site Name] Found notification:', text)
+console.log('[Site Name] ✓ SUCCESS detected:', message)
+console.log('[Site Name] ✗ ERROR:', error)
+console.log('[Site Name] Calculated cooldown:', hours, 'hours ->', new Date(time).toLocaleString())
+```
+
+**Filter console logs**: In browser DevTools, use filter `[Site Name]` to see only relevant logs.
+
+### Testing After Changes
 
 1. **Reload extension**: `chrome://extensions/` → click "Reload" button
 2. **For service worker changes**: May need to unregister at `chrome://serviceworker-internals/`
-3. **Test voting flow**: Add test project → check console logs → verify timing
+3. **For script changes**:
+   - Open browser console (F12)
+   - Filter logs by site name: `[Free Case]`, `[Wheel Fortune]`, etc.
+   - Watch full execution flow
+4. **Test voting flow**: Add test project → check console logs → verify timing
 
-## Common Issues
+## Common Issues and Solutions
 
-- **"Script failed to load" error**: Check file exists and is imported in `background.js` install event
+### Extension Won't Load
+- **"Service worker registration failed. Status code: 15"**: Syntax error or import issue in Service Worker
+  - Check all `importScripts()` use absolute paths with `/` prefix
+  - Verify all imported files exist and have valid syntax: `node -c path/to/file.js`
+  - Look for empty or malformed import files
+
+### Voting Loop (Keeps Reopening Tab)
+- **Script sends `{later: true}` without specific time AND `lastSuccessVote` is empty**
+  - Solution: Always calculate and send specific timestamp: `{later: Date.now() + cooldownMs}`
+  - Add logging to verify: `console.log('[Site] Calculated cooldown time:', new Date(time).toLocaleString())`
+
+### Vote Detection Issues
 - **Vote counted as success but timer visible**: Check cooldown BEFORE clicking button, not after
+- **Cooldown message not detected**:
+  - Check message text in console logs
+  - Verify cooldown keywords include all variations (case-insensitive)
+  - Check notification appears/disappears quickly - add multiple check attempts with delays
 - **Captcha not detected**: Verify `notRequiredCaptcha()` is not set to true
+
+### Path Issues After Refactoring
+- **Files not found**: Update paths in `options.html` to use `../../` for root resources
+  - Images: `../../images/icons/file.svg`
+  - Scripts: `../core/main.js`, `../utils/database/db-init.js`
+
+## Module System and Dependencies
+
+### Service Worker Context
+- Uses `importScripts()` for synchronous module loading
+- All paths must be absolute from extension root: `/libs/file.js`, `/src/core/file.js`
+- Database migrations loaded in specific order (see `background.js`)
+- No ES6 modules support in Service Worker context
+
+### Content Script Context
+- Loaded via `<script>` tags in HTML or injected via `chrome.scripting.executeScript`
+- Can use relative paths from HTML location
+- Shares same functions as Service Worker but loaded differently
+
+### Shared Code Pattern
+Files used in both contexts (like `main.js`):
+- No `importScripts()` calls inside (would fail in HTML context)
+- Dependencies loaded externally before the shared file
+- Service Worker: imports via `background.js`
+- HTML: imports via `<script>` tags in correct order
 
 ## Important Notes
 
@@ -217,3 +320,4 @@ Only send `{successfully}` after confirmed vote, not when cooldown detected.
 - **Line endings**: Files use CRLF (Windows), git may show warnings
 - **No linting**: Project has no linter/formatter configured
 - **Browser compatibility**: Chrome 105.0+, designed for Chromium-based browsers
+- **File structure**: After refactoring, core files are in `src/` subdirectories
