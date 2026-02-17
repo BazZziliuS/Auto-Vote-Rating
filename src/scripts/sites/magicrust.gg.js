@@ -52,8 +52,10 @@ function sendError(message) {
 function sendCooldown(nextVoteTime) {
     // If no specific time provided for free case, calculate based on cooldown hours
     if (!nextVoteTime && typeof MESSAGES.freeCaseCooldownHours !== 'undefined') {
-        nextVoteTime = Date.now() + (MESSAGES.freeCaseCooldownHours * 60 * 60 * 1000) + (60 * 1000) // +1 minute buffer
-        console.log('[Free Case] Calculated cooldown time:', MESSAGES.freeCaseCooldownHours, 'hours →', new Date(nextVoteTime).toLocaleString())
+        const hours = MESSAGES.freeCaseCooldownHours
+        const milliseconds = (hours * 60 * 60 * 1000) + (60 * 1000)
+        nextVoteTime = Date.now() + milliseconds
+        console.log('[Free Case] Calculated cooldown time:', hours, 'hours ->', new Date(nextVoteTime).toLocaleString())
     }
     chrome.runtime.sendMessage({later: nextVoteTime || true})
 }
