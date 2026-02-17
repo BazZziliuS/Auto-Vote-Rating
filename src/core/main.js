@@ -11,7 +11,7 @@ var generalStats
 //Статистика за сегодня
 // noinspection ES6ConvertVarToLetConst
 var todayStats
-//Оновная база данных
+//Основная база данных
 // noinspection ES6ConvertVarToLetConst
 var db
 //База данных логов

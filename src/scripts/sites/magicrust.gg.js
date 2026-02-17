@@ -16,8 +16,16 @@ const SELECTORS = {
 }
 
 const MESSAGES = {
-    cooldown: ['10 часов', '10 hours', 'доступен каждые'],
-    success: ['успешно', 'success'],
+    cooldown: [
+        '10 часов', '10 hours',
+        'доступен каждые', 'доступн', 'available in',
+        'кулдаун', 'cooldown',
+        'подожди', 'wait',
+        'уже получ', 'already received', 'already claimed',
+        'попробуй позже', 'try later',
+        'час', 'hour', 'мин', 'min'
+    ],
+    success: ['успешно', 'success', 'получен', 'received', 'claimed'],
     insufficientFunds: 'Недостаточно средств'
 }
 
@@ -176,17 +184,43 @@ async function handleModalActions(modal) {
 // Result Checking Functions
 // ============================================================================
 function checkNotificationResult() {
-    const notification = document.querySelector(SELECTORS.notification)
-    if (!notification) return false
+    // Try to find any notification (including those that are disappearing)
+    const notifications = document.querySelectorAll('.notyf__message, .notyf__toast, ' + SELECTORS.notification)
+    if (notifications.length === 0) return false
 
-    const text = notification.textContent.trim()
-    if (handleNotificationMessage(text)) {
-        return true
+    // Check all notifications (sometimes multiple can be present)
+    for (const notification of notifications) {
+        if (!notification) continue
+
+        const text = notification.textContent.trim()
+        if (!text) continue
+
+        // Check for cooldown message
+        if (containsAny(text.toLowerCase(), MESSAGES.cooldown.map(m => m.toLowerCase()))) {
+            sendCooldown()
+            return true
+        }
+
+        // Check for success message
+        if (containsAny(text.toLowerCase(), MESSAGES.success.map(m => m.toLowerCase()))) {
+            sendSuccess()
+            return true
+        }
+
+        // Check for insufficient funds
+        if (text.includes(MESSAGES.insufficientFunds)) {
+            sendMessage('ERROR: Opened wrong case (not free). Got: ' + text)
+            return true
+        }
+
+        // If we found a message but don't recognize it, log it
+        if (text.length > 5) {
+            sendMessage(text)
+            return true
+        }
     }
 
-    // Unknown error
-    sendMessage(text)
-    return true
+    return false
 }
 
 function checkErrorMessages() {
@@ -236,16 +270,54 @@ async function voteFreeCase(first) {
     // Execute only on first run
     if (first === false) return
 
+    // Wait a bit for page to fully load
+    await wait(500)
+
+    // Check if there's already a notification about cooldown
+    const existingNotification = document.querySelector(SELECTORS.notification)
+    if (existingNotification) {
+        const text = existingNotification.textContent.trim()
+        if (containsAny(text, MESSAGES.cooldown)) {
+            sendCooldown()
+            return
+        }
+    }
+
     // Step 1: Activate modded mode
     if (!await activateModdedMode()) {
         return
     }
 
-    // Step 2: Validate and click free case
+    // Step 2: Validate free case
     const freeCaseButton = validateFreeCase()
     if (!freeCaseButton) {
         return
     }
+
+    // Check button state before clicking
+    const freeCase = freeCaseButton.closest(SELECTORS.productCard)
+    if (freeCase) {
+        // Check if button is disabled or has cooldown class
+        if (freeCaseButton.disabled ||
+            freeCaseButton.classList.contains('disabled') ||
+            freeCaseButton.classList.contains('cooldown')) {
+            sendCooldown()
+            return
+        }
+
+        // Check button text for cooldown indicators
+        const buttonText = freeCaseButton.textContent.trim().toLowerCase()
+        if (buttonText.includes('час') ||
+            buttonText.includes('hour') ||
+            buttonText.includes('мин') ||
+            buttonText.includes('min') ||
+            buttonText.includes(':')) {
+            sendCooldown()
+            return
+        }
+    }
+
+    // Step 3: Click free case button
     freeCaseButton.click()
 
     // Step 3: Wait for modal and handle it
@@ -259,10 +331,19 @@ async function voteFreeCase(first) {
         return
     }
 
-    // Step 4: Wait for result and check messages
-    await wait(TIMEOUTS.waitResult)
+    // Step 4: Wait for result and check messages multiple times
+    // Sometimes notifications appear with delay
+    for (let attempt = 0; attempt < 5; attempt++) {
+        await wait(500)
 
-    // Check in order of priority
+        // Check in order of priority
+        if (checkNotificationResult()) return
+        if (checkErrorMessages()) return
+        if (checkSuccessMessages()) return
+    }
+
+    // Final check after longer wait
+    await wait(1000)
     if (checkNotificationResult()) return
     if (checkErrorMessages()) return
     if (checkSuccessMessages()) return
