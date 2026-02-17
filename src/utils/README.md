@@ -2,32 +2,70 @@
 
 Директория содержит переиспользуемые модули для расширения Auto Vote Rating.
 
-## 📁 Структура модулей (19 модулей)
+> **Важно:** После рефакторинга (2026-02-16) все пути импорта используют **абсолютные пути с префиксом `/`** для корректной работы в Service Worker контексте.
+
+## 📁 Структура модулей
 
 ```
-utils/
-├── index.js                      # 🎯 Barrel export (импорт всех модулей)
-├── README.md                     # 📖 Документация
-├── constants.js                  # ⚙️ Константы TIME и LIMITS
-├── time.js                       # ⏰ Утилиты времени
-├── project.js                    # 📊 Утилиты проектов
-├── retry.js                      # 🔄 Retry логика
-├── database-helpers.js           # 💾 Работа с IndexedDB
-├── opened-projects-manager.js    # 🗂️ Менеджер открытых проектов
-├── alarms.js                     # ⏰ Chrome alarms
-├── vote-time-calculator.js       # 🕐 Вычисление времени голосования
-├── vote-result-handler.js        # ✅ Обработка результатов
-├── stats-updater.js              # 📈 Обновление статистики
-├── silent-vote-handler.js        # 🤫 Silent vote обработка
-├── tab-manager.js                # 🗂️ Управление вкладками
-├── message-handlers.js           # 📨 Обработка сообщений
-├── notifications.js              # 🔔 Уведомления
-├── cookies-manager.js            # 🍪 Управление cookies
-├── error-handler.js              # ⚠️ Обработка ошибок
-├── url-matchers.js               # 🔗 Проверка и сопоставление URL
-├── end-vote-helpers.js           # 🏁 Helper функции для endVote
-└── console-interceptor.js        # 📝 Логирование
+src/utils/
+├── index.js                       # 🎯 Barrel export (импорт всех модулей)
+├── README.md                      # 📖 Документация
+│
+├── core/                          # Базовые утилиты
+│   ├── constants.js               # ⚙️ Константы TIME и LIMITS
+│   ├── time.js                    # ⏰ Утилиты времени
+│   ├── project.js                 # 📊 Утилиты проектов
+│   └── retry.js                   # 🔄 Retry логика
+│
+├── database/                      # Работа с IndexedDB
+│   ├── database-helpers.js        # 💾 CRUD операции с IndexedDB
+│   ├── db-init.js                 # 🚀 Инициализация и загрузка данных
+│   └── db-migrations/             # Миграции базы данных
+│       ├── index.js               # Экспорт функции runDatabaseUpgrade
+│       ├── migration-v0.js        # v0: Начальная схема БД
+│       ├── migration-v1-v12.js    # v1-v12: Ранние миграции
+│       ├── migration-v13.js       # v13: Добавление полей
+│       └── migration-v14.js       # v14: Обновление схемы
+│
+├── voting/                        # Логика голосования
+│   ├── opened-projects-manager.js # 🗂️ Менеджер открытых проектов
+│   ├── vote-time-calculator.js    # 🕐 Вычисление времени голосования
+│   ├── vote-result-handler.js     # ✅ Обработка результатов
+│   ├── stats-updater.js           # 📈 Обновление статистики
+│   ├── silent-vote-handler.js     # 🤫 Silent vote обработка
+│   ├── message-handlers.js        # 📨 Обработка сообщений
+│   ├── error-handler.js           # ⚠️ Обработка ошибок
+│   └── end-vote-helpers.js        # 🏁 Helper функции для endVote
+│
+└── browser/                       # Утилиты браузера
+    ├── alarms.js                  # ⏰ Chrome alarms API
+    ├── tab-manager.js             # 🗂️ Управление вкладками
+    ├── notifications.js           # 🔔 Уведомления
+    ├── cookies-manager.js         # 🍪 Управление cookies
+    ├── url-matchers.js            # 🔗 Проверка и сопоставление URL
+    ├── connection-checker.js      # 🌐 Проверка соединения
+    ├── browser-detector.js        # 🔍 Определение браузера
+    ├── console-interceptor.js     # 📝 Логирование в IndexedDB
+    ├── script-injector.js         # 💉 Инъекция скриптов
+    ├── listener-manager.js        # 🎧 Управление listeners
+    └── notification-handlers.js   # 🔔 Обработчики уведомлений
 ```
+
+## 🔧 Разделение контекстов
+
+**Service Worker (background.js):**
+- Использует `importScripts()` с абсолютными путями от корня расширения
+- Пример: `importScripts('/src/utils/index.js')`
+- Все пути начинаются с `/`
+
+**HTML Context (options.html):**
+- Использует теги `<script>` с относительными путями
+- Пример: `<script src="../utils/database/db-init.js"></script>`
+- Пути относительно местоположения HTML файла
+
+**Общая логика (main.js):**
+- Загружается и в Service Worker, и в HTML
+- Не содержит `importScripts()` - импорты делаются в вызывающем контексте
 
 ## 📁 Структура модулей
 
@@ -342,38 +380,282 @@ LIMITS = {
 
 ## 🔧 Импорт модулей
 
-### Способ 1: Barrel export (рекомендуется)
+### Способ 1: Barrel export (рекомендуется для Service Worker)
 
 ```javascript
-importScripts('utils/index.js')  // Импортирует все модули в правильном порядке
+// В background.js
+importScripts('/src/utils/index.js')  // Импортирует все модули в правильном порядке
 ```
 
 ### Способ 2: Индивидуальный импорт
 
-В `background.js` модули импортируются в следующем порядке:
+В `src/core/background.js` модули импортируются в следующем порядке:
 
 ```javascript
-importScripts('libs/idb.umd.js')
-importScripts('projects.js')
-importScripts('main.js')
-importScripts('utils/constants.js')              // Сначала константы
-importScripts('utils/time.js')                   // Базовые утилиты
-importScripts('utils/project.js')
-importScripts('utils/retry.js')
-importScripts('utils/database-helpers.js')       // Работа с БД
-importScripts('utils/opened-projects-manager.js') // Менеджер открытых проектов
-importScripts('utils/alarms.js')
-importScripts('utils/vote-time-calculator.js')
-importScripts('utils/vote-result-handler.js')    // Обработка результатов
-importScripts('utils/stats-updater.js')
-importScripts('utils/tab-manager.js')
-importScripts('utils/notifications.js')
-importScripts('utils/cookies-manager.js')        // Управление cookies
-importScripts('utils/error-handler.js')          // Обработка ошибок
-importScripts('utils/url-matchers.js')           // Проверка URL
-importScripts('utils/end-vote-helpers.js')       // Helper endVote
-importScripts('utils/console-interceptor.js')    // Последним - перехват console
+// Библиотеки и основные модули
+importScripts('/libs/idb.umd.js')
+importScripts('/libs/linkedom.js')
+importScripts('/src/core/projects.js')
+
+// Database migrations (порядок важен!)
+importScripts('/src/utils/database/db-migrations/migration-v0.js')
+importScripts('/src/utils/database/db-migrations/migration-v1-v12.js')
+importScripts('/src/utils/database/db-migrations/migration-v13.js')
+importScripts('/src/utils/database/db-migrations/migration-v14.js')
+importScripts('/src/utils/database/db-migrations/index.js')
+
+// Database initialization
+importScripts('/src/utils/database/db-init.js')
+
+// Main initialization
+importScripts('/src/core/main.js')
+
+// Utilities (через barrel export или отдельно)
+importScripts('/src/utils/index.js')
+
+// Или индивидуально:
+// importScripts('/src/utils/core/constants.js')              // Сначала константы
+// importScripts('/src/utils/core/time.js')                   // Базовые утилиты
+// importScripts('/src/utils/core/project.js')
+// importScripts('/src/utils/core/retry.js')
+// importScripts('/src/utils/database/database-helpers.js')   // Работа с БД
+// importScripts('/src/utils/voting/opened-projects-manager.js')
+// importScripts('/src/utils/voting/vote-time-calculator.js')
+// importScripts('/src/utils/voting/vote-result-handler.js')
+// importScripts('/src/utils/voting/stats-updater.js')
+// importScripts('/src/utils/voting/silent-vote-handler.js')
+// importScripts('/src/utils/voting/message-handlers.js')
+// importScripts('/src/utils/voting/error-handler.js')
+// importScripts('/src/utils/voting/end-vote-helpers.js')
+// importScripts('/src/utils/browser/alarms.js')
+// importScripts('/src/utils/browser/tab-manager.js')
+// importScripts('/src/utils/browser/notifications.js')
+// importScripts('/src/utils/browser/cookies-manager.js')
+// importScripts('/src/utils/browser/url-matchers.js')
+// importScripts('/src/utils/browser/connection-checker.js')
+// importScripts('/src/utils/browser/browser-detector.js')
+// importScripts('/src/utils/browser/console-interceptor.js')  // Последним - перехват console
+// importScripts('/src/utils/browser/script-injector.js')
+// importScripts('/src/utils/browser/listener-manager.js')
+// importScripts('/src/utils/browser/notification-handlers.js')
 ```
+
+### Способ 3: HTML Context (options.html)
+
+```html
+<!-- Database migrations -->
+<script src="../utils/database/db-migrations/migration-v0.js"></script>
+<script src="../utils/database/db-migrations/migration-v1-v12.js"></script>
+<script src="../utils/database/db-migrations/migration-v13.js"></script>
+<script src="../utils/database/db-migrations/migration-v14.js"></script>
+<script src="../utils/database/db-migrations/index.js"></script>
+
+<!-- Database initialization -->
+<script src="../utils/database/db-init.js"></script>
+
+<!-- Main logic -->
+<script src="../core/main.js"></script>
+
+<!-- Utilities (загружаются выборочно, не все нужны в HTML) -->
+<script src="../utils/core/constants.js"></script>
+<script src="../utils/database/database-helpers.js"></script>
+<!-- ... остальные по необходимости -->
+```
+
+## 💾 Database Migrations
+
+Модульная система миграций базы данных позволяет безопасно обновлять схему IndexedDB.
+
+### Структура миграций
+
+```
+src/utils/database/db-migrations/
+├── index.js               # Экспорт runDatabaseUpgrade()
+├── migration-v0.js        # createInitialSchema() - начальная схема
+├── migration-v1-v12.js    # Ранние миграции (v1-v12)
+├── migration-v13.js       # Миграция v13
+└── migration-v14.js       # Миграция v14
+```
+
+### Как работает система миграций
+
+1. **Регистрация миграций** (`index.js`):
+```javascript
+const migrations = {
+    0: createInitialSchema,
+    1: migrateToV1,
+    // ... до v14
+    14: migrateToV14
+}
+
+function runDatabaseUpgrade(db, oldVersion, newVersion, transaction, allProjects, getDomainWithoutSubdomain) {
+    for (let version = oldVersion; version < newVersion; version++) {
+        const migrate = migrations[version]
+        if (migrate) {
+            migrate(db, transaction, allProjects, getDomainWithoutSubdomain)
+        }
+    }
+}
+```
+
+2. **Использование в main.js**:
+```javascript
+db = await idb.openDB('avr', 15, {
+    upgrade: (db, oldVersion, newVersion, transaction) => {
+        return runDatabaseUpgrade(db, oldVersion, newVersion, transaction, allProjects, getDomainWithoutSubdomain)
+    }
+})
+```
+
+3. **Создание новой миграции**:
+- Создать файл `migration-vXX.js`
+- Экспортировать функцию `migrateToVXX(db, transaction)`
+- Импортировать в `index.js`
+- Зарегистрировать в объекте `migrations`
+- Увеличить версию БД в `main.js`
+
+### Пример миграции
+
+```javascript
+// migration-v15.js
+function migrateToV15(db, transaction) {
+    const projectsStore = transaction.objectStore('projects')
+
+    // Добавить индекс
+    if (!projectsStore.indexNames.contains('byDomain')) {
+        projectsStore.createIndex('byDomain', 'domain', { unique: false })
+    }
+
+    console.log('Migration to v15 completed')
+}
+```
+
+---
+
+## 🎯 Common Patterns
+
+### Отправка конкретного времени кулдауна
+
+**ВАЖНО:** Всегда отправляйте конкретный timestamp, а не `{later: true}`!
+
+```javascript
+// ❌ НЕПРАВИЛЬНО - может создать voting loop
+if (cooldownDetected) {
+    chrome.runtime.sendMessage({later: true})
+}
+
+// ✅ ПРАВИЛЬНО - отправляем конкретное время
+function sendCooldown(hours) {
+    const milliseconds = (hours * 60 * 60 * 1000) + (60 * 1000)  // +1 минута запас
+    const nextVoteTime = Date.now() + milliseconds
+
+    console.log('[Cooldown] Calculated:', hours, 'hours ->', new Date(nextVoteTime).toLocaleString())
+    chrome.runtime.sendMessage({later: nextVoteTime})
+}
+
+if (cooldownDetected) {
+    sendCooldown(10)  // 10 часов кулдаун
+}
+```
+
+**Почему это важно:**
+- Если отправить `{later: true}`, background пытается вычислить время на основе `project.stats.lastSuccessVote`
+- Если `lastSuccessVote` пустой или некорректный, кулдаун может истечь мгновенно → voting loop
+- Конкретный timestamp гарантирует правильное время следующего голосования
+
+### Парсинг времени кулдауна
+
+Всегда парсите время ДО клика по кнопке, не после:
+
+```javascript
+// Парсинг русского формата "3 ч. 37 м. 36 с."
+function parseCooldownTime(text) {
+    const cleanText = text.trim().replace(/\s+/g, ' ')
+
+    // Формат: "3 ч. 37 м. 36 с."
+    const russianMatch = cleanText.match(/(\d+)\s*ч\.?\s*(\d+)\s*м\.?\s*(\d+)\s*с\.?/)
+    if (russianMatch) {
+        const hours = parseInt(russianMatch[1]) || 0
+        const minutes = parseInt(russianMatch[2]) || 0
+        const seconds = parseInt(russianMatch[3]) || 0
+
+        const milliseconds = (hours * 60 * 60 * 1000) + (minutes * 60 * 1000) + (seconds * 1000)
+        const result = Date.now() + milliseconds + (30 * 1000)  // +30 сек запас
+
+        console.log('[Parsed]:', cleanText, '→', hours + 'h', minutes + 'm', seconds + 's')
+        return result
+    }
+
+    // Формат: "21:59:02" (HH:MM:SS)
+    const timeMatch = cleanText.match(/(\d+):(\d+):(\d+)/)
+    if (timeMatch) {
+        const hours = parseInt(timeMatch[1])
+        const minutes = parseInt(timeMatch[2])
+        const seconds = parseInt(timeMatch[3])
+
+        const milliseconds = (hours * 60 * 60 * 1000) + (minutes * 60 * 1000) + (seconds * 1000)
+        return Date.now() + milliseconds + (30 * 1000)
+    }
+
+    return null
+}
+
+// Использование:
+const timerElement = document.querySelector('.cooldown-timer')
+if (timerElement && timerElement.offsetParent !== null) {
+    const cooldownTime = parseCooldownTime(timerElement.textContent)
+    if (cooldownTime) {
+        chrome.runtime.sendMessage({later: cooldownTime})
+        return
+    }
+}
+```
+
+### Детальное логирование для отладки
+
+Используйте подробные логи для отслеживания процесса голосования:
+
+```javascript
+async function vote(first) {
+    console.log('[Vote] Starting, first:', first)
+
+    // Шаг 1: Проверка кулдауна
+    console.log('[Vote] Step 1: Checking cooldown...')
+    const cooldownElement = document.querySelector('.timer')
+    if (cooldownElement) {
+        console.log('[Vote] ✓ COOLDOWN detected:', cooldownElement.textContent)
+        const time = parseCooldownTime(cooldownElement.textContent)
+        chrome.runtime.sendMessage({later: time})
+        return
+    }
+    console.log('[Vote] ✓ No cooldown, proceeding')
+
+    // Шаг 2: Клик по кнопке
+    console.log('[Vote] Step 2: Finding vote button...')
+    const button = document.querySelector('.vote-btn')
+    if (!button) {
+        console.log('[Vote] ✗ Vote button not found')
+        chrome.runtime.sendMessage({errorVoteNoElement: 'Vote button not found'})
+        return
+    }
+    console.log('[Vote] ✓ Button found, clicking...')
+    button.click()
+
+    // Шаг 3: Проверка результата
+    console.log('[Vote] Step 3: Waiting for result...')
+    await new Promise(resolve => setTimeout(resolve, 2000))
+
+    if (document.querySelector('.success')) {
+        console.log('[Vote] ✓ SUCCESS confirmed')
+        chrome.runtime.sendMessage({successfully: Date.now()})
+        return
+    }
+
+    console.log('[Vote] ✗ Success not confirmed')
+}
+```
+
+---
 
 ## 📝 Правила разработки
 
@@ -385,13 +667,45 @@ importScripts('utils/console-interceptor.js')    // Последним - пер�
 
 ## 🚀 Добавление нового модуля
 
-1. Создать файл в `utils/`
-2. Добавить JSDoc к функциям
-3. Импортировать в `background.js` в правильном порядке
-4. Обновить этот README
-5. Протестировать изменения
+1. **Определить категорию модуля**:
+   - `core/` - базовые утилиты (время, константы, retry)
+   - `database/` - работа с IndexedDB
+   - `voting/` - логика голосования
+   - `browser/` - обертки над Browser API
+
+2. **Создать файл** в соответствующей директории `src/utils/{category}/module-name.js`
+
+3. **Добавить JSDoc** к функциям:
+```javascript
+/**
+ * Описание функции
+ * @param {Type} param - Описание параметра
+ * @returns {Type} Описание возвращаемого значения
+ */
+function myFunction(param) {
+    // ...
+}
+```
+
+4. **Импортировать в `src/utils/index.js`** в правильном порядке (с абсолютным путём):
+```javascript
+importScripts('/src/utils/{category}/module-name.js')
+```
+
+5. **Обновить этот README**:
+   - Добавить описание модуля в секцию "Структура модулей"
+   - Указать экспортируемые функции
+   - Добавить примеры использования
+
+6. **Протестировать изменения**:
+   - Перезагрузить расширение в `chrome://extensions/`
+   - Проверить Service Worker в `chrome://serviceworker-internals/`
+   - Убедиться что нет ошибок импорта
 
 ---
 
-**История рефакторинга:** 2026-02-16
-**Версия:** 1.0
+**История рефакторинга:**
+- 2026-02-16: Начальная модульная структура после рефакторинга
+- 2026-02-17: Обновлена документация, добавлены секции Database Migrations и Common Patterns
+
+**Версия:** 1.1

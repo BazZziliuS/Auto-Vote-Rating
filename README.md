@@ -181,7 +181,85 @@ Here is a short guide how to install an unpacked extension on Google Chrome or C
 4. Click on the "Load unpacked" button and select the directory where you unpacked the archive.
 
 
+## Project Structure
+
+After refactoring (2026-02-16), the project follows a modular architecture:
+
+```
+├── src/
+│   ├── core/              # Core extension logic
+│   │   ├── background.js  # Service Worker (main background script)
+│   │   ├── main.js        # Shared initialization logic
+│   │   ├── options.js     # Options page logic
+│   │   └── projects.js    # Site configurations (150+ sites)
+│   ├── ui/                # User interface
+│   │   ├── options.html   # Extension settings page
+│   │   └── options.css    # Styles
+│   ├── utils/             # Reusable utilities (19 modules)
+│   │   ├── index.js       # Barrel export
+│   │   ├── core/          # Base utilities (time, constants, retry)
+│   │   ├── database/      # IndexedDB helpers + migrations
+│   │   ├── voting/        # Voting logic (calculators, handlers, stats)
+│   │   └── browser/       # Browser API wrappers (tabs, alarms, cookies)
+│   └── scripts/           # Site-specific voting scripts
+│       ├── sites/         # Per-domain voting scripts (DOMAIN.js)
+│       └── main/          # Shared content script utilities (captcha, API)
+├── libs/                  # Third-party libraries
+│   ├── idb.umd.js
+│   └── linkedom.js
+├── images/                # Extension icons and assets
+└── manifest.json          # Chrome Extension Manifest v3
+```
+
+### Key Architecture Patterns
+
+**Service Worker Context vs HTML Context:**
+- `background.js` runs in Service Worker - uses `importScripts()` with **absolute paths** (`/src/core/main.js`)
+- `options.html` runs in HTML context - uses `<script>` tags with **relative paths** (`../core/main.js`)
+
+**Module System:**
+- All utilities in `src/utils/` are imported via barrel export: `importScripts('/src/utils/index.js')`
+- Database migrations are modular: `src/utils/database/db-migrations/`
+- Each site has isolated voting script: `src/scripts/sites/DOMAIN.js`
+
+**Message Protocol:**
+Content scripts communicate with background via:
+- `{successfully: timestamp}` - vote succeeded
+- `{later: timestamp}` - cooldown detected (must send exact timestamp, not `true`)
+- `{errorVoteNoElement: message}` - element not found
+- `{silentVote: true}` - silent vote completed
+
+## Development
+
+### Prerequisites
+- Chrome/Edge 105.0+ (Chromium-based browser)
+- Basic understanding of Chrome Extensions Manifest v3
+- Knowledge of IndexedDB and Service Workers
+
+### Getting Started
+
+1. Clone the repository
+2. Load unpacked extension from `chrome://extensions/`
+3. Read `CLAUDE.md` for detailed development guidelines
+4. See `src/utils/README.md` for utilities documentation
+
+### Adding Support for New Sites
+
+See `CLAUDE.md` for comprehensive guide. Quick overview:
+
+1. Add configuration to `src/core/projects.js`
+2. Create voting script in `src/scripts/sites/DOMAIN.js`
+3. (Optional) Create silent vote script: `DOMAIN_silentvote.js`
+4. Test voting flow and cooldown detection
+
+### Testing Changes
+
+1. Reload extension at `chrome://extensions/`
+2. For Service Worker changes, may need to unregister at `chrome://serviceworker-internals/`
+3. Check console logs in background Service Worker and content script
+4. Verify timing calculations and statistics updates
+
 ## Libraries used
-### [IDB](https://github.com/jakearchibald/idb)
-### [LinkeDOM](https://github.com/WebReflection/linkedom) (also [Polyfill](https://github.com/regseb/castkodi/tree/main/src/polyfill))
-### [HackTimer](https://github.com/turuslan/HackTimer)
+### [IDB](https://github.com/jakearchibald/idb) - IndexedDB wrapper
+### [LinkeDOM](https://github.com/WebReflection/linkedom) - DOM parser for Service Worker (also [Polyfill](https://github.com/regseb/castkodi/tree/main/src/polyfill))
+### [HackTimer](https://github.com/turuslan/HackTimer) - Background-safe timers
