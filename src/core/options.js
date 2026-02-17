@@ -19,10 +19,10 @@ const authVKUrls = new Map([
 ])
 
 const svgFail = document.createElement('img')
-svgFail.src = 'images/icons/error.svg'
+svgFail.src = '../../images/icons/error.svg'
 
 const svgSuccess = document.createElement('img')
-svgSuccess.src = 'images/icons/success.svg'
+svgSuccess.src = '../../images/icons/success.svg'
 
 //Локализация
 const elements = document.querySelectorAll('[data-resource]')
@@ -56,7 +56,7 @@ async function createNotif(message, type, options = {}) {
         }
         options.element.className = type
         if (type === 'success') {
-            options.element.parentElement.parentElement.parentElement.firstElementChild.src = 'images/icons/success.svg'
+            options.element.parentElement.parentElement.parentElement.firstElementChild.src = '../../images/icons/success.svg'
         }
         return
     }
@@ -69,7 +69,7 @@ async function createNotif(message, type, options = {}) {
 
     if (type !== 'hint') {
         let imgBlock = document.createElement('img')
-        imgBlock.src = 'images/notif/' + type + '.png'
+        imgBlock.src = '../../images/notif/' + type + '.png'
         notif.append(imgBlock)
         let progressBlock = document.createElement('div')
         progressBlock.classList.add('progress')
@@ -319,7 +319,7 @@ async function addProjectList(project, preBend) {
         img3text.classList.add('tooltiptext')
         img3text.textContent = chrome.i18n.getMessage('edit')
         img3.classList.add('projectStats')
-        img3svg.src = 'images/icons/edit.svg'
+        img3svg.src = '../../images/icons/edit.svg'
         img3.appendChild(img3svg)
         img3.appendChild(img3text)
         div.appendChild(img3)
@@ -331,7 +331,7 @@ async function addProjectList(project, preBend) {
     img0text.classList.add('tooltiptext')
     img0text.textContent = chrome.i18n.getMessage('restart')
     img0.classList.add('projectStats')
-    img0svg.src = 'images/icons/restart.svg'
+    img0svg.src = '../../images/icons/restart.svg'
     img0.appendChild(img0svg)
     img0.appendChild(img0text)
     div.appendChild(img0)
@@ -342,7 +342,7 @@ async function addProjectList(project, preBend) {
     img1text.classList.add('tooltiptext')
     img1text.textContent = chrome.i18n.getMessage('stats2')
     img1.classList.add('projectStats')
-    img1svg.src = 'images/icons/stats.svg'
+    img1svg.src = '../../images/icons/stats.svg'
     img1.appendChild(img1svg)
     img1.appendChild(img1text)
     div.appendChild(img1)
@@ -353,7 +353,7 @@ async function addProjectList(project, preBend) {
     img2text.classList.add('tooltiptext')
     img2text.textContent = chrome.i18n.getMessage('deleteButton')
     img2.classList.add('projectStats')
-    img2svg.src = 'images/icons/delete.svg'
+    img2svg.src = '../../images/icons/delete.svg'
     img2.appendChild(img2svg)
     img2.appendChild(img2text)
     div.appendChild(img2)
@@ -782,7 +782,7 @@ function resetEdit(project) {
     document.getElementById('voteMode').dispatchEvent(new Event('change'))
     document.getElementById('rating').value = ''
     document.getElementById('rating').dispatchEvent(new Event('input'))
-    document.querySelector('#addTab img').src = 'images/icons/addBtn.svg'
+    document.querySelector('#addTab img').src = '../../images/icons/addBtn.svg'
     document.querySelector('#addTab div').textContent = chrome.i18n.getMessage('addButton')
     document.querySelector('[data-resource="addTitle"]').textContent = chrome.i18n.getMessage('addTitle')
     document.querySelector('.editSubtitle').removeAttribute('id')
@@ -808,7 +808,7 @@ function editProject(project, switchToEdit) {
     resetEdit()
     editingProject = project
     document.querySelector('#addTab div').textContent = chrome.i18n.getMessage('edit')
-    document.querySelector('#addTab img').src = 'images/icons/edit.svg'
+    document.querySelector('#addTab img').src = '../../images/icons/edit.svg'
     if (switchToEdit) document.getElementById('addTab').click()
     document.getElementById('switchAddMode').checked = true
     document.getElementById('switchAddMode').dispatchEvent(new Event('change'))
@@ -1368,7 +1368,7 @@ async function addProject(project, element) {
                 button.id = 'authvk'
                 button.classList.add('btn')
                 const img = document.createElement('img')
-                img.src = 'images/icons/arrow.svg'
+                img.src = '../../images/icons/arrow.svg'
                 button.append(img)
                 const text = document.createElement('div')
                 text.textContent = chrome.i18n.getMessage('authButton')
@@ -2527,7 +2527,7 @@ async function updateProjectText(project) {
                     imgtext.classList.add('tooltiptext')
                     imgtext.textContent = chrome.i18n.getMessage('access')
                     img.classList.add('projectStats')
-                    imgsvg.src = 'images/icons/access.svg'
+                    imgsvg.src = '../../images/icons/access.svg'
                     imgsvg.classList.add('access')
                     img.appendChild(imgsvg)
                     img.appendChild(imgtext)

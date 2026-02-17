@@ -1,6 +1,8 @@
-// Импорт утилит базы данных
-importScripts('src/utils/database/db-init.js')
-importScripts('src/utils/database/db-migrations/migrations.js')
+// Импорт утилит базы данных (только для Service Worker контекста)
+if (typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope) {
+    importScripts('src/utils/database/db-init.js')
+    importScripts('src/utils/database/db-migrations/migrations.js')
+}
 
 //Настройки
 // noinspection ES6ConvertVarToLetConst
