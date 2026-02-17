@@ -2,22 +2,22 @@
 
 const state = self.serviceWorker.state
 
-importScripts('libs/idb.umd.js')
-importScripts('src/core/projects.js')
+importScripts('/libs/idb.umd.js')
+importScripts('/src/core/projects.js')
 // Импорт утилит базы данных (должны быть ДО main.js)
-importScripts('src/utils/database/db-migrations/migration-v0.js')
-importScripts('src/utils/database/db-migrations/migration-v1-v12.js')
-importScripts('src/utils/database/db-migrations/migration-v13.js')
-importScripts('src/utils/database/db-migrations/migration-v14.js')
-importScripts('src/utils/database/db-migrations/index.js')
-importScripts('src/utils/database/db-init.js')
-importScripts('src/core/main.js')
-importScripts('src/utils/index.js')
+importScripts('/src/utils/database/db-migrations/migration-v0.js')
+importScripts('/src/utils/database/db-migrations/migration-v1-v12.js')
+importScripts('/src/utils/database/db-migrations/migration-v13.js')
+importScripts('/src/utils/database/db-migrations/migration-v14.js')
+importScripts('/src/utils/database/db-migrations/index.js')
+importScripts('/src/utils/database/db-init.js')
+importScripts('/src/core/main.js')
+importScripts('/src/utils/index.js')
 
 // TODO отложенный importScripts пока не работают, подробнее https://bugs.chromium.org/p/chromium/issues/detail?id=1198822
 self.addEventListener('install', () => {
-    importScripts('libs/linkedom.js')
-    importScripts('src/scripts/silentvote/mcserver-list.eu_silentvote.js', 'src/scripts/silentvote/misterlauncher.org_silentvote.js', 'src/scripts/silentvote/serverpact.com_silentvote.js', 'src/scripts/silentvote/genshindrop.com_silentvote.js', 'src/scripts/silentvote/bloodrust.com_silentvote.js')
+    importScripts('/libs/linkedom.js')
+    importScripts('/src/scripts/silentvote/mcserver-list.eu_silentvote.js', '/src/scripts/silentvote/misterlauncher.org_silentvote.js', '/src/scripts/silentvote/serverpact.com_silentvote.js', '/src/scripts/silentvote/genshindrop.com_silentvote.js', '/src/scripts/silentvote/bloodrust.com_silentvote.js')
 })
 
 //ID группы вкладок в которой сейчас открыты вкладки расширения
