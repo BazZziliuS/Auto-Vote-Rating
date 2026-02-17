@@ -26,7 +26,8 @@ const MESSAGES = {
         'час', 'hour', 'мин', 'min'
     ],
     success: ['успешно', 'success', 'получен', 'received', 'claimed'],
-    insufficientFunds: 'Недостаточно средств'
+    insufficientFunds: 'Недостаточно средств',
+    freeCaseCooldownHours: 10 // Кулдаун для free daily case в часах
 }
 
 const TIMEOUTS = {
@@ -49,6 +50,11 @@ function sendError(message) {
 }
 
 function sendCooldown(nextVoteTime) {
+    // If no specific time provided for free case, calculate based on cooldown hours
+    if (!nextVoteTime && typeof MESSAGES.freeCaseCooldownHours !== 'undefined') {
+        nextVoteTime = Date.now() + (MESSAGES.freeCaseCooldownHours * 60 * 60 * 1000) + (60 * 1000) // +1 minute buffer
+        console.log('[Free Case] Calculated cooldown time:', MESSAGES.freeCaseCooldownHours, 'hours →', new Date(nextVoteTime).toLocaleString())
+    }
     chrome.runtime.sendMessage({later: nextVoteTime || true})
 }
 
