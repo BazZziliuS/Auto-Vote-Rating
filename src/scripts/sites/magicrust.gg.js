@@ -374,42 +374,73 @@ const WHEEL_TIMEOUTS = {
 
 // Cooldown Parsing Functions
 function parseCooldownTime(text) {
-    // Try to parse format "21 ч. 59 м. 2 с." (Russian format from magicrust.gg)
-    const russianMatch = text.match(/(\d+)\s*ч\.\s*(\d+)\s*м\.\s*(\d+)\s*с\./)
+    if (!text) return null
+
+    // Clean up text: remove extra spaces, normalize
+    const cleanText = text.trim().replace(/\s+/g, ' ')
+
+    // Try to parse format "3 ч. 37 м. 36 с." (Russian format from magicrust.gg)
+    // Also handle variations: "3ч. 37м. 36с.", "3 ч 37 м 36 с"
+    const russianMatch = cleanText.match(/(\d+)\s*ч\.?\s*(\d+)\s*м\.?\s*(\d+)\s*с\.?/)
     if (russianMatch) {
-        const hours = parseInt(russianMatch[1])
-        const minutes = parseInt(russianMatch[2])
-        const seconds = parseInt(russianMatch[3])
+        const hours = parseInt(russianMatch[1]) || 0
+        const minutes = parseInt(russianMatch[2]) || 0
+        const seconds = parseInt(russianMatch[3]) || 0
         const milliseconds = (hours * 60 * 60 * 1000) + (minutes * 60 * 1000) + (seconds * 1000)
-        return Date.now() + milliseconds + (30 * 1000) // +30 seconds buffer
+        const result = Date.now() + milliseconds + (30 * 1000) // +30 seconds buffer
+        console.log('[Wheel Fortune] Parsed Russian format:', cleanText, '→', hours + 'h', minutes + 'm', seconds + 's', '→ Next vote:', new Date(result).toLocaleString())
+        return result
+    }
+
+    // Try format with only hours and minutes: "3 ч. 37 м."
+    const russianHMMatch = cleanText.match(/(\d+)\s*ч\.?\s*(\d+)\s*м\.?/)
+    if (russianHMMatch) {
+        const hours = parseInt(russianHMMatch[1]) || 0
+        const minutes = parseInt(russianHMMatch[2]) || 0
+        const milliseconds = (hours * 60 * 60 * 1000) + (minutes * 60 * 1000)
+        const result = Date.now() + milliseconds + (30 * 1000)
+        console.log('[Wheel Fortune] Parsed Russian H:M format:', cleanText, '→', hours + 'h', minutes + 'm', '→ Next vote:', new Date(result).toLocaleString())
+        return result
     }
 
     // Try to find time in format HH:MM:SS or H:MM:SS
-    const timeMatch = text.match(/(\d+):(\d+):(\d+)/)
+    const timeMatch = cleanText.match(/(\d+):(\d+):(\d+)/)
     if (timeMatch) {
-        const hours = parseInt(timeMatch[1])
-        const minutes = parseInt(timeMatch[2])
-        const seconds = parseInt(timeMatch[3])
+        const hours = parseInt(timeMatch[1]) || 0
+        const minutes = parseInt(timeMatch[2]) || 0
+        const seconds = parseInt(timeMatch[3]) || 0
         const milliseconds = (hours * 60 * 60 * 1000) + (minutes * 60 * 1000) + (seconds * 1000)
-        return Date.now() + milliseconds + (60 * 1000) // +1 minute buffer
+        const result = Date.now() + milliseconds + (60 * 1000) // +1 minute buffer
+        console.log('[Wheel Fortune] Parsed HH:MM:SS format:', cleanText, '→ Next vote:', new Date(result).toLocaleString())
+        return result
     }
 
     // Try to find hours in text (e.g., "22 часа", "22 hours")
-    const hoursMatch = text.match(/(\d+)\s*(час|hour)/i)
+    const hoursMatch = cleanText.match(/(\d+)\s*(час|hour)/i)
     if (hoursMatch) {
-        const hours = parseInt(hoursMatch[1])
-        return Date.now() + (hours * 60 * 60 * 1000) + (60 * 1000)
+        const hours = parseInt(hoursMatch[1]) || 0
+        const result = Date.now() + (hours * 60 * 60 * 1000) + (60 * 1000)
+        console.log('[Wheel Fortune] Parsed hours only:', cleanText, '→', hours + 'h', '→ Next vote:', new Date(result).toLocaleString())
+        return result
     }
 
+    console.log('[Wheel Fortune] Could not parse time from:', cleanText)
     return null
 }
 
 function getCooldownFromPage() {
     // Try to find cooldown timer elements
     const timerElements = document.querySelectorAll(WHEEL_SELECTORS.cooldownTimer)
+    console.log('[Wheel Fortune] Looking for timer elements, found:', timerElements.length)
 
     for (const element of timerElements) {
+        if (!element || !element.textContent) continue
+
         const text = element.textContent.trim()
+        if (text.length === 0) continue
+
+        console.log('[Wheel Fortune] Checking timer element:', element.className, 'Text:', text)
+
         const cooldownTime = parseCooldownTime(text)
         if (cooldownTime) {
             return cooldownTime
@@ -417,7 +448,10 @@ function getCooldownFromPage() {
     }
 
     // Default to 22 hours if we can't parse
-    return Date.now() + (22 * 60 * 60 * 1000)
+    console.log('[Wheel Fortune] No timer found, using default 22 hours')
+    const defaultTime = Date.now() + (22 * 60 * 60 * 1000)
+    console.log('[Wheel Fortune] Default next vote:', new Date(defaultTime).toLocaleString())
+    return defaultTime
 }
 
 // Button Finding
@@ -451,13 +485,23 @@ async function voteWheelFortune(first) {
     // Wait for page to load
     await wait(WHEEL_TIMEOUTS.pageLoad)
 
+    console.log('[Wheel Fortune] Checking for cooldown timer on page load')
+
     // Check if cooldown timer is already visible (BEFORE clicking button)
     const timerElement = document.querySelector('.wheel-fortune__wheel-timer-lost')
-    if (timerElement && timerElement.offsetParent !== null) {
-        // Timer is visible - cooldown is active
-        const cooldownTime = getCooldownFromPage()
-        sendCooldown(cooldownTime)
-        return
+    if (timerElement) {
+        console.log('[Wheel Fortune] Timer element found:', timerElement.textContent)
+        console.log('[Wheel Fortune] Timer visible:', timerElement.offsetParent !== null)
+
+        if (timerElement.offsetParent !== null) {
+            // Timer is visible - cooldown is active
+            console.log('[Wheel Fortune] Cooldown is active, parsing time...')
+            const cooldownTime = getCooldownFromPage()
+            sendCooldown(cooldownTime)
+            return
+        }
+    } else {
+        console.log('[Wheel Fortune] No timer element found, button should be available')
     }
 
     // Find the spin button
