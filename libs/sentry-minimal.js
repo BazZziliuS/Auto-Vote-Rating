@@ -172,13 +172,15 @@
                 })
 
                 if (!response.ok) {
-                    console.warn('[Sentry] Failed to send event:', response.status)
+                    const text = await response.text()
+                    console.warn('[Sentry] Failed to send event:', response.status, text)
                     return null
                 }
 
-                return await response.json()
+                const result = await response.json()
+                return result
             } catch (error) {
-                console.warn('[Sentry] Error sending event:', error)
+                console.error('[Sentry] Error sending event:', error)
                 return null
             }
         }
