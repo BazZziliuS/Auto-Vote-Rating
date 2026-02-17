@@ -1,0 +1,80 @@
+name: Build Extension
+
+on:
+  push:
+    branches:
+      - dev
+      - main
+      - refactor
+  pull_request:
+    branches:
+      - dev
+      - main
+  workflow_dispatch:  # Позволяет запускать вручную
+
+jobs:
+  build:
+    name: Build and Package Extension
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get version from manifest
+        id: get_version
+        run: |
+          VERSION=$(grep -oP '"version":\s*"\K[^"]+' manifest.json)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Extension version: $VERSION"
+
+      - name: Get branch name
+        id: get_branch
+        run: |
+          BRANCH=${GITHUB_REF#refs/heads/}
+          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+          echo "Building from branch: $BRANCH"
+
+      - name: Package extension
+        run: |
+          # Создаём временную директорию для сборки
+          mkdir -p build/Auto-Vote-Rating
+
+          # Копируем все необходимые файлы
+          cp -r src build/Auto-Vote-Rating/
+          cp -r libs build/Auto-Vote-Rating/
+          cp -r images build/Auto-Vote-Rating/
+          cp -r _locales build/Auto-Vote-Rating/
+          cp -r css build/Auto-Vote-Rating/
+          cp -r fonts build/Auto-Vote-Rating/
+          cp manifest.json build/Auto-Vote-Rating/
+
+          # Переходим в директорию build и создаём архив
+          cd build
+          zip -r Auto-Vote-Rating-${{ steps.get_version.outputs.version }}-${{ steps.get_branch.outputs.branch }}.zip Auto-Vote-Rating
+
+          # Показываем содержимое архива для проверки
+          echo "Archive contents:"
+          unzip -l Auto-Vote-Rating-${{ steps.get_version.outputs.version }}-${{ steps.get_branch.outputs.branch }}.zip | head -20
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Auto-Vote-Rating-${{ steps.get_version.outputs.version }}-${{ steps.get_branch.outputs.branch }}
+          path: build/Auto-Vote-Rating-${{ steps.get_version.outputs.version }}-${{ steps.get_branch.outputs.branch }}.zip
+          retention-days: 90
+
+      - name: Build summary
+        run: |
+          echo "## 🎉 Build Successful" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Extension Version:** ${{ steps.get_version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** ${{ steps.get_branch.outputs.branch }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Artifact:** Auto-Vote-Rating-${{ steps.get_version.outputs.version }}-${{ steps.get_branch.outputs.branch }}.zip" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Installation" >> $GITHUB_STEP_SUMMARY
+          echo "1. Download the artifact from this workflow run" >> $GITHUB_STEP_SUMMARY
+          echo "2. Extract the zip archive" >> $GITHUB_STEP_SUMMARY
+          echo "3. Open \`chrome://extensions/\` in your browser" >> $GITHUB_STEP_SUMMARY
+          echo "4. Enable 'Developer mode'" >> $GITHUB_STEP_SUMMARY
+          echo "5. Click 'Load unpacked' and select the extracted folder" >> $GITHUB_STEP_SUMMARY

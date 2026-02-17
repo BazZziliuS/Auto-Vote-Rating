@@ -1,0 +1,106 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # Триггерится на теги вида v7.2.6, v7.3.0 и т.д.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag version (e.g., v7.2.6)'
+        required: true
+        type: string
+
+jobs:
+  release:
+    name: Create Release with Extension Package
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get version from manifest
+        id: get_version
+        run: |
+          VERSION=$(grep -oP '"version":\s*"\K[^"]+' manifest.json)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Extension version: $VERSION"
+
+      - name: Get tag name
+        id: get_tag
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
+            TAG=${GITHUB_REF#refs/tags/}
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "Release tag: $TAG"
+
+      - name: Package extension
+        run: |
+          # Создаём временную директорию для сборки
+          mkdir -p build/Auto-Vote-Rating
+
+          # Копируем все необходимые файлы
+          cp -r src build/Auto-Vote-Rating/
+          cp -r libs build/Auto-Vote-Rating/
+          cp -r images build/Auto-Vote-Rating/
+          cp -r _locales build/Auto-Vote-Rating/
+          cp -r css build/Auto-Vote-Rating/
+          cp -r fonts build/Auto-Vote-Rating/
+          cp manifest.json build/Auto-Vote-Rating/
+          cp README.md build/Auto-Vote-Rating/
+          cp PRIVACY.md build/Auto-Vote-Rating/
+
+          # Переходим в директорию build и создаём архив
+          cd build
+          zip -r Auto-Vote-Rating-${{ steps.get_version.outputs.version }}.zip Auto-Vote-Rating
+
+          # Показываем размер архива
+          ls -lh Auto-Vote-Rating-${{ steps.get_version.outputs.version }}.zip
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Генерируем changelog из последних коммитов
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+
+          if [ -z "$PREVIOUS_TAG" ]; then
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" --max-count=20)
+          else
+            CHANGELOG=$(git log ${PREVIOUS_TAG}..HEAD --pretty=format:"- %s (%h)")
+          fi
+
+          # Сохраняем в файл для использования в release
+          echo "$CHANGELOG" > changelog.txt
+
+          echo "Changelog generated"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.get_tag.outputs.tag }}
+          name: Auto Vote Rating ${{ steps.get_version.outputs.version }}
+          body_path: changelog.txt
+          files: |
+            build/Auto-Vote-Rating-${{ steps.get_version.outputs.version }}.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Release summary
+        run: |
+          echo "## 🎉 Release Created" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ steps.get_version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Tag:** ${{ steps.get_tag.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Installation" >> $GITHUB_STEP_SUMMARY
+          echo "1. Download \`Auto-Vote-Rating-${{ steps.get_version.outputs.version }}.zip\` from the release" >> $GITHUB_STEP_SUMMARY
+          echo "2. Extract the archive" >> $GITHUB_STEP_SUMMARY
+          echo "3. Open \`chrome://extensions/\` in your browser" >> $GITHUB_STEP_SUMMARY
+          echo "4. Enable 'Developer mode'" >> $GITHUB_STEP_SUMMARY
+          echo "5. Click 'Load unpacked' and select the extracted \`Auto-Vote-Rating\` folder" >> $GITHUB_STEP_SUMMARY
