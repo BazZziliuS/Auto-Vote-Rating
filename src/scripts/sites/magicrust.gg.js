@@ -186,6 +186,8 @@ async function handleModalActions(modal) {
 function checkNotificationResult() {
     // Try to find any notification (including those that are disappearing)
     const notifications = document.querySelectorAll('.notyf__message, .notyf__toast, ' + SELECTORS.notification)
+    console.log('[Free Case] checkNotificationResult: found', notifications.length, 'notifications')
+
     if (notifications.length === 0) return false
 
     // Check all notifications (sometimes multiple can be present)
@@ -195,26 +197,32 @@ function checkNotificationResult() {
         const text = notification.textContent.trim()
         if (!text) continue
 
+        console.log('[Free Case] Notification text:', text)
+
         // Check for cooldown message
         if (containsAny(text.toLowerCase(), MESSAGES.cooldown.map(m => m.toLowerCase()))) {
+            console.log('[Free Case] ✓ COOLDOWN detected:', text)
             sendCooldown()
             return true
         }
 
         // Check for success message
         if (containsAny(text.toLowerCase(), MESSAGES.success.map(m => m.toLowerCase()))) {
+            console.log('[Free Case] ✓ SUCCESS detected:', text)
             sendSuccess()
             return true
         }
 
         // Check for insufficient funds
         if (text.includes(MESSAGES.insufficientFunds)) {
+            console.log('[Free Case] ✗ ERROR - Insufficient funds:', text)
             sendMessage('ERROR: Opened wrong case (not free). Got: ' + text)
             return true
         }
 
         // If we found a message but don't recognize it, log it
         if (text.length > 5) {
+            console.log('[Free Case] ⚠ Unknown message:', text)
             sendMessage(text)
             return true
         }
@@ -225,14 +233,21 @@ function checkNotificationResult() {
 
 function checkErrorMessages() {
     const errorMsg = document.querySelector(SELECTORS.errorMessage)
-    if (!errorMsg) return false
+    if (!errorMsg) {
+        console.log('[Free Case] checkErrorMessages: no error element found')
+        return false
+    }
 
     const text = errorMsg.textContent.trim()
+    console.log('[Free Case] Error message found:', text)
+
     if (containsAny(text, MESSAGES.cooldown)) {
+        console.log('[Free Case] ✓ COOLDOWN detected in error message')
         sendCooldown()
         return true
     }
 
+    console.log('[Free Case] ⚠ Unknown error message')
     sendMessage(text)
     return true
 }
@@ -240,9 +255,11 @@ function checkErrorMessages() {
 function checkSuccessMessages() {
     const successMsg = document.querySelector(SELECTORS.successMessage)
     if (successMsg) {
+        console.log('[Free Case] ✓ SUCCESS message element found')
         sendSuccess()
         return true
     }
+    console.log('[Free Case] checkSuccessMessages: no success element found')
     return false
 }
 
@@ -262,35 +279,49 @@ async function vote(first) {
 // Free Daily Case Vote Function
 // ============================================================================
 async function voteFreeCase(first) {
+    console.log('[Free Case] Starting voteFreeCase, first:', first)
+
     // Check for immediate messages
+    console.log('[Free Case] Checking for initial notification...')
     if (checkInitialNotification()) {
+        console.log('[Free Case] Initial notification found and handled')
         return
     }
 
     // Execute only on first run
-    if (first === false) return
+    if (first === false) {
+        console.log('[Free Case] Not first run, skipping')
+        return
+    }
 
     // Wait a bit for page to fully load
     await wait(500)
 
     // Check if there's already a notification about cooldown
+    console.log('[Free Case] Checking for existing notification...')
     const existingNotification = document.querySelector(SELECTORS.notification)
     if (existingNotification) {
         const text = existingNotification.textContent.trim()
+        console.log('[Free Case] Found notification:', text)
         if (containsAny(text, MESSAGES.cooldown)) {
+            console.log('[Free Case] Cooldown message detected in notification')
             sendCooldown()
             return
         }
     }
 
     // Step 1: Activate modded mode
+    console.log('[Free Case] Step 1: Activating modded mode...')
     if (!await activateModdedMode()) {
+        console.log('[Free Case] Failed to activate modded mode')
         return
     }
 
     // Step 2: Validate free case
+    console.log('[Free Case] Step 2: Validating free case button...')
     const freeCaseButton = validateFreeCase()
     if (!freeCaseButton) {
+        console.log('[Free Case] Free case button validation failed')
         return
     }
 
@@ -301,54 +332,84 @@ async function voteFreeCase(first) {
         if (freeCaseButton.disabled ||
             freeCaseButton.classList.contains('disabled') ||
             freeCaseButton.classList.contains('cooldown')) {
+            console.log('[Free Case] Button is disabled or has cooldown class')
             sendCooldown()
             return
         }
 
         // Check button text for cooldown indicators
         const buttonText = freeCaseButton.textContent.trim().toLowerCase()
+        console.log('[Free Case] Button text:', buttonText)
         if (buttonText.includes('час') ||
             buttonText.includes('hour') ||
-            buttonText.includes('мин') ||
+            buttonText.includes('мін') ||
             buttonText.includes('min') ||
             buttonText.includes(':')) {
+            console.log('[Free Case] Button text contains cooldown indicator')
             sendCooldown()
             return
         }
     }
 
     // Step 3: Click free case button
+    console.log('[Free Case] Step 3: Clicking free case button...')
     freeCaseButton.click()
 
-    // Step 3: Wait for modal and handle it
+    // Step 4: Wait for modal
+    console.log('[Free Case] Step 4: Waiting for modal...')
     const modal = await waitForModal()
     if (!modal) {
+        console.log('[Free Case] Modal did not appear or cooldown detected')
         return
     }
 
+    console.log('[Free Case] Step 5: Handling modal actions...')
     const caseOpened = await handleModalActions(modal)
     if (!caseOpened) {
+        console.log('[Free Case] Case was not opened (may need auth or other issue)')
         return
     }
 
-    // Step 4: Wait for result and check messages multiple times
+    // Step 6: Wait for result and check messages multiple times
+    console.log('[Free Case] Step 6: Waiting for result...')
     // Sometimes notifications appear with delay
     for (let attempt = 0; attempt < 5; attempt++) {
+        console.log('[Free Case] Check attempt', attempt + 1, 'of 5')
         await wait(500)
 
         // Check in order of priority
-        if (checkNotificationResult()) return
-        if (checkErrorMessages()) return
-        if (checkSuccessMessages()) return
+        if (checkNotificationResult()) {
+            console.log('[Free Case] Notification result found')
+            return
+        }
+        if (checkErrorMessages()) {
+            console.log('[Free Case] Error message found')
+            return
+        }
+        if (checkSuccessMessages()) {
+            console.log('[Free Case] Success message found')
+            return
+        }
     }
 
     // Final check after longer wait
+    console.log('[Free Case] Final check after 1 second...')
     await wait(1000)
-    if (checkNotificationResult()) return
-    if (checkErrorMessages()) return
-    if (checkSuccessMessages()) return
+    if (checkNotificationResult()) {
+        console.log('[Free Case] Final check: Notification result found')
+        return
+    }
+    if (checkErrorMessages()) {
+        console.log('[Free Case] Final check: Error message found')
+        return
+    }
+    if (checkSuccessMessages()) {
+        console.log('[Free Case] Final check: Success message found')
+        return
+    }
 
     // If we got here, assume success
+    console.log('[Free Case] No result found, assuming success')
     sendSuccess()
 }
 
