@@ -78,6 +78,21 @@ jobs:
 
           echo "Changelog generated"
 
+      - name: Install crx3 for CRX packaging
+        run: npm install -g crx3
+
+      - name: Generate private key
+        run: |
+          openssl genrsa 2048 > build/key.pem
+
+      - name: Create CRX package
+        run: |
+          cd build
+          crx3 Auto-Vote-Rating -o Auto-Vote-Rating-${{ steps.get_version.outputs.version }}.crx -p key.pem
+
+          echo "Created packages:"
+          ls -lh Auto-Vote-Rating-${{ steps.get_version.outputs.version }}.*
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
@@ -86,6 +101,7 @@ jobs:
           body_path: changelog.txt
           files: |
             build/Auto-Vote-Rating-${{ steps.get_version.outputs.version }}.zip
+            build/Auto-Vote-Rating-${{ steps.get_version.outputs.version }}.crx
           draft: false
           prerelease: false
         env:

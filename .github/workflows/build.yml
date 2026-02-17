@@ -57,11 +57,39 @@ jobs:
           echo "Archive contents:"
           unzip -l Auto-Vote-Rating-${{ steps.get_version.outputs.version }}-${{ steps.get_branch.outputs.branch }}.zip | head -20
 
-      - name: Upload artifact
+      - name: Install crx3 for CRX packaging
+        run: npm install -g crx3
+
+      - name: Generate private key if not exists
+        run: |
+          if [ ! -f build/key.pem ]; then
+            echo "Generating new private key..."
+            openssl genrsa 2048 > build/key.pem
+          fi
+
+      - name: Create CRX package
+        run: |
+          cd build
+
+          # Создаём .crx файл
+          crx3 Auto-Vote-Rating -o Auto-Vote-Rating-${{ steps.get_version.outputs.version }}-${{ steps.get_branch.outputs.branch }}.crx -p key.pem
+
+          # Показываем информацию о файлах
+          echo "Created packages:"
+          ls -lh Auto-Vote-Rating-${{ steps.get_version.outputs.version }}-${{ steps.get_branch.outputs.branch }}.*
+
+      - name: Upload ZIP artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Auto-Vote-Rating-${{ steps.get_version.outputs.version }}-${{ steps.get_branch.outputs.branch }}
+          name: Auto-Vote-Rating-ZIP-${{ steps.get_version.outputs.version }}-${{ steps.get_branch.outputs.branch }}
           path: build/Auto-Vote-Rating-${{ steps.get_version.outputs.version }}-${{ steps.get_branch.outputs.branch }}.zip
+          retention-days: 90
+
+      - name: Upload CRX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Auto-Vote-Rating-CRX-${{ steps.get_version.outputs.version }}-${{ steps.get_branch.outputs.branch }}
+          path: build/Auto-Vote-Rating-${{ steps.get_version.outputs.version }}-${{ steps.get_branch.outputs.branch }}.crx
           retention-days: 90
 
       - name: Build summary
