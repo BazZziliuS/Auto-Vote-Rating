@@ -21,6 +21,14 @@
 
     const dsnParts = parseDSN(SENTRY_DSN)
 
+    // Debug: показываем распарсенный DSN
+    console.log('[Sentry Debug] DSN parsed:', {
+        publicKey: dsnParts.publicKey,
+        host: dsnParts.host,
+        projectId: dsnParts.projectId,
+        fullURL: `https://${dsnParts.host}/api/${dsnParts.projectId}/store/`
+    })
+
     class SentryClient {
         constructor(options = {}) {
             this.options = {
