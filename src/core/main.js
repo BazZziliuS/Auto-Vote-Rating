@@ -1,8 +1,6 @@
-// Импорт утилит базы данных (только для Service Worker контекста)
-if (typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope) {
-    importScripts('src/utils/database/db-init.js')
-    importScripts('src/utils/database/db-migrations/migrations.js')
-}
+// Импорт утилит базы данных
+// Для Service Worker: импортируются в background.js
+// Для options.html: загружаются через теги <script>
 
 //Настройки
 // noinspection ES6ConvertVarToLetConst

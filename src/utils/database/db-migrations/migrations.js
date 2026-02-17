@@ -5,11 +5,6 @@
  * importScripts('src/utils/database/db-migrations/migrations.js')
  */
 
-// Импорт всех миграций (только для Service Worker контекста)
-if (typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope) {
-    importScripts('src/utils/database/db-migrations/migration-v0.js')
-    importScripts('src/utils/database/db-migrations/migration-v1-v12.js')
-    importScripts('src/utils/database/db-migrations/migration-v13.js')
-    importScripts('src/utils/database/db-migrations/migration-v14.js')
-    importScripts('src/utils/database/db-migrations/index.js')
-}
+// Импорт всех миграций
+// Для Service Worker: импортируются в background.js
+// Для options.html: загружаются через теги <script>

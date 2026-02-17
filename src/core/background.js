@@ -4,6 +4,14 @@ const state = self.serviceWorker.state
 
 importScripts('libs/idb.umd.js')
 importScripts('src/core/projects.js')
+// Импорт утилит базы данных (должны быть ДО main.js)
+importScripts('src/utils/database/db-migrations/migration-v0.js')
+importScripts('src/utils/database/db-migrations/migration-v1-v12.js')
+importScripts('src/utils/database/db-migrations/migration-v13.js')
+importScripts('src/utils/database/db-migrations/migration-v14.js')
+importScripts('src/utils/database/db-migrations/index.js')
+importScripts('src/utils/database/db-migrations/migrations.js')
+importScripts('src/utils/database/db-init.js')
 importScripts('src/core/main.js')
 importScripts('src/utils/index.js')
 
