@@ -156,6 +156,135 @@ google-chrome --load-extension="/path/to/Auto-Vote-Rating.crx"
 
 ---
 
+## 🔧 Решение ошибки "CRX_REQUIRED_PROOF_MISSING"
+
+### ❌ Проблема:
+При попытке установить `.crx` файл в Chrome появляется ошибка:
+```
+Пакет недействителен: "CRX_REQUIRED_PROOF_MISSING"
+Package is invalid: "CRX_REQUIRED_PROOF_MISSING"
+```
+
+### 📖 Причина:
+Chrome требует, чтобы расширения были подписаны сертификатом Chrome Web Store или установлены через корпоративную политику. Это защита от вредоносных расширений.
+
+### ✅ Решения (от простого к сложному):
+
+#### **Решение 1: Распаковать как ZIP и установить** (рекомендуется)
+
+**Шаг 1: Переименуйте файл**
+```bash
+# Windows (PowerShell)
+Rename-Item Auto-Vote-Rating-7.2.6.crx Auto-Vote-Rating-7.2.6.zip
+
+# Linux/Mac
+mv Auto-Vote-Rating-7.2.6.crx Auto-Vote-Rating-7.2.6.zip
+```
+
+**Шаг 2: Распакуйте архив**
+```bash
+# Windows (PowerShell)
+Expand-Archive Auto-Vote-Rating-7.2.6.zip -DestinationPath Auto-Vote-Rating
+
+# Linux/Mac
+unzip Auto-Vote-Rating-7.2.6.zip -d Auto-Vote-Rating
+```
+
+**Шаг 3: Установите в Chrome**
+1. Откройте `chrome://extensions/`
+2. Включите **"Режим разработчика"** (Developer mode) в правом верхнем углу
+3. Нажмите **"Загрузить распакованное расширение"** (Load unpacked)
+4. Выберите папку `Auto-Vote-Rating`
+5. ✅ Готово! Расширение установлено
+
+---
+
+#### **Решение 2: Использовать ZIP-артефакт вместо CRX**
+
+Просто скачайте `.zip` файл вместо `.crx`:
+- В Artifacts ищите `Auto-Vote-Rating-ZIP-*` вместо `Auto-Vote-Rating-CRX-*`
+- В Releases скачайте `.zip` файл
+
+Затем следуйте шагам 2-3 из Решения 1.
+
+---
+
+#### **Решение 3: Установка через командную строку (временная)**
+
+**Windows:**
+```cmd
+"C:\Program Files\Google\Chrome\Application\chrome.exe" ^
+  --load-extension="C:\path\to\Auto-Vote-Rating.crx"
+```
+
+**Linux:**
+```bash
+google-chrome --load-extension="/path/to/Auto-Vote-Rating.crx"
+```
+
+**Mac:**
+```bash
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
+  --load-extension="/path/to/Auto-Vote-Rating.crx"
+```
+
+⚠️ **Недостаток:** Расширение останется активным только пока открыт Chrome, запущенный с этим флагом.
+
+---
+
+#### **Решение 4: Enterprise Policy (для корпоративных сред)**
+
+Для системных администраторов, управляющих парком машин:
+
+**Windows (через GPO):**
+1. Разместите `.crx` файл на сетевом ресурсе
+2. Создайте политику `ExtensionInstallForcelist` в `HKLM\SOFTWARE\Policies\Google\Chrome`
+3. Добавьте значение:
+   ```
+   {extension_id};file:///C:/path/to/Auto-Vote-Rating.crx
+   ```
+
+**Linux (через `/etc/opt/chrome/policies/`):**
+```json
+{
+  "ExtensionInstallForcelist": [
+    "{extension_id};file:///path/to/Auto-Vote-Rating.crx"
+  ]
+}
+```
+
+⚠️ **Примечание:** `extension_id` можно получить из установленного расширения в `chrome://extensions/`
+
+---
+
+### 🔍 Альтернатива: Используйте Edge
+
+Microsoft Edge более лоялен к сторонним расширениям:
+
+1. Откройте `edge://extensions/`
+2. Включите "Режим разработчика"
+3. Перетащите `.crx` файл на страницу
+4. Нажмите "Установить"
+
+⚠️ **Может работать не всегда**, зависит от версии Edge.
+
+---
+
+### 💡 Рекомендация:
+
+**Для обычных пользователей:**
+- Используйте **Решение 1** (распаковка .crx как .zip)
+- Или скачайте сразу `.zip` файл вместо `.crx`
+
+**Для разработчиков:**
+- Используйте **Решение 1** для ежедневной разработки
+- `.crx` файл полезен для тестирования упаковки перед публикацией
+
+**Для системных администраторов:**
+- Используйте **Решение 4** (Enterprise Policy) для массового развертывания
+
+---
+
 ## 🔧 Обслуживание
 
 ### Обновление версии перед релизом
