@@ -167,17 +167,28 @@
             const sentryKey = dsnParts.publicKey
             const sentryUrl = `https://${dsnParts.host}/api/${dsnParts.projectId}/store/`
 
+            console.log('[Sentry Debug] === STARTING SEND ===')
+            console.log('[Sentry Debug] URL:', sentryUrl)
+            console.log('[Sentry Debug] Event:', event)
+
             const headers = {
                 'Content-Type': 'application/json',
                 'X-Sentry-Auth': `Sentry sentry_version=7, sentry_key=${sentryKey}, sentry_client=sentry-minimal/1.0.0`
             }
 
+            console.log('[Sentry Debug] Headers:', headers)
+
             try {
+                console.log('[Sentry Debug] Sending fetch...')
                 const response = await fetch(sentryUrl, {
                     method: 'POST',
                     headers: headers,
                     body: JSON.stringify(event)
                 })
+
+                console.log('[Sentry Debug] Response received')
+                console.log('[Sentry Debug] Status:', response.status)
+                console.log('[Sentry Debug] OK:', response.ok)
 
                 if (!response.ok) {
                     const text = await response.text()
@@ -185,10 +196,14 @@
                     return null
                 }
 
+                console.log('[Sentry Debug] Parsing JSON...')
                 const result = await response.json()
+                console.log('[Sentry Debug] Result:', result)
+                console.log('[Sentry Debug] === SEND COMPLETE ===')
                 return result
             } catch (error) {
                 console.error('[Sentry] Error sending event:', error)
+                console.error('[Sentry Debug] Error stack:', error.stack)
                 return null
             }
         }
