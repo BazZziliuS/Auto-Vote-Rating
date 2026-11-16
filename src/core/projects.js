@@ -1402,6 +1402,8 @@ var allProjects = {
             return {id: 'free daily case'}
         },
         timeout: (project) => project.id === 'wheel fortune' ? ({hours: 22, minutes: 1}) : ({hours: 10, minutes: 1}),
+        // Если не удалось нажать кнопку (ошибка) — повтор не через 15 минут, а через 3 часа, чтобы вкладка не открывалась постоянно
+        errorCoolDown: () => 3 * 60 * 60 * 1000,
         notRequiredCaptcha: () => true,
         notRequiredNick: () => true,
         notRequiredId: () => true,

@@ -154,6 +154,12 @@ async function waitForModal() {
         if (modal && modal.classList.contains('modal-on')) {
             return modal
         }
+        // Запасной вариант: любая открытая модалка с кнопкой открытия кейса
+        const anyModal = Array.from(document.querySelectorAll('.modal.modal-on'))
+            .find(m => m.querySelector(SELECTORS.openCaseButton))
+        if (anyModal) {
+            return anyModal
+        }
     }
 
     // Check if cooldown message appeared
@@ -171,21 +177,41 @@ async function handleModalActions(modal) {
     await wait(TIMEOUTS.buttonReady)
 
     // Check if user needs to authenticate
+    // Не кликаем авторизацию: после редиректа скрипт не продолжит работу и вкладка зависнет до таймаута
     const authButton = modal.querySelector(SELECTORS.authButton)
     if (authButton) {
-        authButton.click()
+        sendError('Требуется авторизация через Steam на magicrust.gg')
         return false
     }
 
-    // Try to open the case
-    const openCaseButton = modal.querySelector(SELECTORS.openCaseButton)
+    // Ищем кнопку сначала в найденной модалке, затем среди видимых модалок на странице
+    const openCaseButton = modal.querySelector(SELECTORS.openCaseButton) ||
+        Array.from(document.querySelectorAll('.modal.modal-on ' + SELECTORS.openCaseButton)).find(btn => btn.offsetParent !== null) ||
+        Array.from(document.querySelectorAll(SELECTORS.openCaseButton)).find(btn => btn.offsetParent !== null)
     if (!openCaseButton) {
-        sendError('Open case button not found in modal')
+        sendError('Не найдена кнопка «Открыть кейс» в окне кейса')
+        return false
+    }
+
+    // Кнопка в КД: data-cooldown-active="1" / disabled / «Доступно через 5ч 19м 16с»
+    if (isOpenCaseButtonOnCooldown(openCaseButton)) {
+        const timerText = openCaseButton.querySelector('.modal-roulette__timer')?.textContent ||
+            openCaseButton.querySelector('.modal-roulette__btn-cooldown')?.textContent || ''
+        const cooldownTime = parseCooldownTime(timerText)
+        console.log('[Free Case] Open case button on cooldown, timer:', timerText.trim(), '->', cooldownTime ? new Date(cooldownTime).toLocaleString() : 'default')
+        sendCooldown(cooldownTime)
         return false
     }
 
     openCaseButton.click()
     return true
+}
+
+function isOpenCaseButtonOnCooldown(button) {
+    if (button.getAttribute('data-cooldown-active') === '1') return true
+    if (button.disabled || button.classList.contains('disabled')) return true
+    const cooldownSpan = button.querySelector('.modal-roulette__btn-cooldown')
+    return !!(cooldownSpan && !cooldownSpan.hidden && cooldownSpan.offsetParent !== null)
 }
 
 // ============================================================================
@@ -261,7 +287,9 @@ function checkErrorMessages() {
 }
 
 function checkSuccessMessages() {
-    const successMsg = document.querySelector(SELECTORS.successMessage)
+    // Учитываем только видимые элементы: скрытый шаблон результата рулетки есть в DOM всегда
+    const successMsg = Array.from(document.querySelectorAll(SELECTORS.successMessage))
+        .find(el => el.offsetParent !== null && el.textContent.trim().length > 0)
     if (successMsg) {
         console.log('[Free Case] ✓ SUCCESS message element found')
         sendSuccess()
@@ -416,9 +444,10 @@ async function voteFreeCase(first) {
         return
     }
 
-    // If we got here, assume success
-    console.log('[Free Case] No result found, assuming success')
-    sendSuccess()
+    // Явного подтверждения нет — НЕ считаем голос успешным (обычно это значит, что кейс в КД).
+    // Отправляем конкретное время кулдауна, чтобы вкладка не открывалась повторно.
+    console.log('[Free Case] No result found, treating as cooldown (not success)')
+    sendCooldown()
 }
 
 // ============================================================================
@@ -469,6 +498,16 @@ function parseCooldownTime(text) {
         const milliseconds = (hours * 60 * 60 * 1000) + (minutes * 60 * 1000)
         const result = Date.now() + milliseconds + (30 * 1000)
         console.log('[Wheel Fortune] Parsed Russian H:M format:', cleanText, '→', hours + 'h', minutes + 'm', '→ Next vote:', new Date(result).toLocaleString())
+        return result
+    }
+
+    // Формат без часов: "19м 16с" / "19 м. 16 с."
+    const russianMSMatch = cleanText.match(/(\d+)\s*м\.?\s*(\d+)\s*с/)
+    if (russianMSMatch) {
+        const minutes = parseInt(russianMSMatch[1]) || 0
+        const seconds = parseInt(russianMSMatch[2]) || 0
+        const result = Date.now() + (minutes * 60 + seconds) * 1000 + (30 * 1000)
+        console.log('[magicrust] Parsed M:S format:', cleanText, '→ Next vote:', new Date(result).toLocaleString())
         return result
     }
 
@@ -598,74 +637,80 @@ async function voteWheelFortune(first) {
         return
     }
 
+    // Кулдаун может отображаться прямо в тексте кнопки (например "21:59:02" или "3 ч. 37 м.")
+    const buttonCooldown = parseCooldownTime(spinButton.textContent)
+    if (buttonCooldown) {
+        console.log('[Wheel Fortune] Cooldown found in button text:', spinButton.textContent.trim())
+        sendCooldown(buttonCooldown)
+        return
+    }
+
+    // Запоминаем текст уведомлений до клика, чтобы реагировать только на новые
+    const notificationsBefore = new Set(Array.from(document.querySelectorAll('.notyf__message')).map(n => n.textContent.trim()))
+
     // Button is enabled - click to spin
+    console.log('[Wheel Fortune] Clicking spin button')
     spinButton.click()
 
-    // Wait for spin animation and result
-    await wait(WHEEL_TIMEOUTS.spinAnimation)
-
-    // Check for success indicators
-    const successMsg = document.querySelector(WHEEL_SELECTORS.successMessage)
-    if (successMsg) {
-        sendSuccess()
-
-        // Try to get new cooldown time after successful spin
+    // Ждём результат: проверяем уведомления в процессе, т.к. они быстро исчезают
+    const deadline = Date.now() + WHEEL_TIMEOUTS.spinAnimation
+    while (Date.now() < deadline) {
         await wait(WHEEL_TIMEOUTS.cooldownCheck)
-        const cooldownTime = getCooldownFromPage()
-        if (cooldownTime) {
-            chrome.runtime.sendMessage({later: cooldownTime})
-        }
-        return
-    }
 
-    // Check if button is disabled after spin (indicates success)
-    if (spinButton.disabled || spinButton.classList.contains('disabled')) {
-        sendSuccess()
-
-        // Try to get new cooldown time after successful spin
-        await wait(WHEEL_TIMEOUTS.cooldownCheck)
-        const cooldownTime = getCooldownFromPage()
-        if (cooldownTime) {
-            chrome.runtime.sendMessage({later: cooldownTime})
-        }
-        return
-    }
-
-    // Check if timer appeared after spin (indicates success)
-    const timerAfterSpin = document.querySelector('.wheel-fortune__wheel-timer-lost')
-    if (timerAfterSpin && timerAfterSpin.offsetParent !== null) {
-        sendSuccess()
-
-        // Get new cooldown time
-        const cooldownTime = getCooldownFromPage()
-        if (cooldownTime) {
-            chrome.runtime.sendMessage({later: cooldownTime})
-        }
-        return
-    }
-
-    // Check for error messages
-    const errorMsg = document.querySelector(WHEEL_SELECTORS.errorMessage)
-    if (errorMsg) {
-        const errorText = errorMsg.textContent.trim()
-        if (errorText.toLowerCase().includes('кулдаун') ||
-            errorText.toLowerCase().includes('cooldown') ||
-            errorText.toLowerCase().includes('доступно через')) {
-            const cooldownTime = getCooldownFromPage()
-            sendCooldown(cooldownTime)
+        const result = checkWheelNotifications(notificationsBefore)
+        if (result === 'cooldown') {
+            sendCooldown(getCooldownFromPage())
             return
         }
-        sendMessage(errorText)
+        if (result === 'success') {
+            sendSuccess()
+            return
+        }
+        if (result) {
+            // Неизвестное сообщение сайта — ошибка (повтор через errorCoolDown из projects.js)
+            sendMessage(result)
+            return
+        }
+    }
+
+    // Таймер появился ТОЛЬКО после клика (до клика его не было видно) — колесо прокручено
+    const timerAfterSpin = document.querySelector('.wheel-fortune__wheel-timer-lost')
+    if (timerAfterSpin && timerAfterSpin.offsetParent !== null) {
+        console.log('[Wheel Fortune] ✓ SUCCESS: timer appeared after spin')
+        sendSuccess()
         return
     }
 
-    // If we got here, assume success
-    sendSuccess()
+    // Явного подтверждения нет — НЕ считаем успехом (обычно кнопка просто в КД и не реагирует)
+    console.log('[Wheel Fortune] No result after click, treating as cooldown (not success)')
+    sendCooldown(getCooldownFromPage())
+}
 
-    // Try to get cooldown time
-    await wait(WHEEL_TIMEOUTS.cooldownCheck)
-    const cooldownTime = getCooldownFromPage()
-    if (cooldownTime) {
-        chrome.runtime.sendMessage({later: cooldownTime})
+/**
+ * Проверяет новые уведомления после клика по колесу
+ * @returns {'success'|'cooldown'|string|null} тип результата, текст неизвестного сообщения или null
+ */
+function checkWheelNotifications(notificationsBefore) {
+    const notifications = document.querySelectorAll('.notyf__message, ' + WHEEL_SELECTORS.notification)
+    for (const notification of notifications) {
+        const text = notification.textContent.trim()
+        if (!text || notificationsBefore.has(text)) continue
+
+        const lower = text.toLowerCase()
+        console.log('[Wheel Fortune] Notification:', text)
+
+        if (containsAny(lower, ['кулдаун', 'cooldown', 'доступно через', 'доступн', 'подожди', 'wait', 'уже', 'already', 'попробуй позже', 'try later', 'не можете', 'нельзя'])) {
+            console.log('[Wheel Fortune] ✓ COOLDOWN detected:', text)
+            return 'cooldown'
+        }
+        if (containsAny(lower, MESSAGES.success) || lower.includes('выигр') || lower.includes('приз') || lower.includes('won')) {
+            console.log('[Wheel Fortune] ✓ SUCCESS detected:', text)
+            return 'success'
+        }
+        if (text.length > 5) {
+            console.log('[Wheel Fortune] ⚠ Unknown message:', text)
+            return text
+        }
     }
+    return null
 }

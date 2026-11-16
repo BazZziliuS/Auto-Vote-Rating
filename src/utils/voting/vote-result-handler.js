@@ -34,6 +34,12 @@ function calculateErrorCooldown(request, project, settings) {
         return 60000 // 1 минута
     }
 
+    // Индивидуальный cooldown после ошибки из конфигурации проекта (projects.js)
+    const projectErrorCoolDown = typeof allProjects !== 'undefined' ? allProjects[project.rating]?.errorCoolDown?.(project) : null
+    if (projectErrorCoolDown) {
+        return projectErrorCoolDown
+    }
+
     return settings.timeoutError
 }
 
